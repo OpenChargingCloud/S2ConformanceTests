@@ -35,14 +35,13 @@ dotnet build S2InteropTests/S2InteropTests.csproj
 dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|TestCategory=Specification"
 ```
 
-Expected (2026-09-06, Windows): 128 tests, 108 passed, 20 known issues (warnings), 0 failed.
-Prerequisites: .NET 10 SDK, Python 3.9–3.13, Rust. On Windows the S2 Connect drivers of
-s2-rust build and run inside WSL (Debian with rustup; `s2energy-connection` is Unix-only),
-and the "s2-rust client → WWCP server" tests additionally need the Windows firewall to admit
-the test host from the WSL network. On Linux the "WWCP RM → s2-python CEM" fixture is a
-known issue of Hermod (H1/H2 in FINDINGS.md). Fixtures skip with a reason when a toolchain is
-missing; `S2_INTEROP_REQUIRE=1` (what the CI sets) makes that a failure. All `S2_INTEROP_*`
-variables are listed in README.md.
+Expected (2026-09-06): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
+Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.9–3.13, Rust. On Windows the S2
+Connect drivers of s2-rust build and run inside WSL (Debian with rustup;
+`s2energy-connection` is Unix-only), and the "s2-rust client → WWCP server" tests
+additionally need the Windows firewall to admit the test host from the WSL network. Fixtures
+skip with a reason when a toolchain is missing; `S2_INTEROP_REQUIRE=1` (what the CI sets)
+makes that a failure. All `S2_INTEROP_*` variables are listed in README.md.
 
 ## Ground rules
 
@@ -58,8 +57,9 @@ variables are listed in README.md.
   the specification text first (quoted in FINDINGS.md; the OpenAPI files are in
   `libs/s2-connect/openapi`, the schemas in `libs/s2-json`). The reference implementations
   have been wrong before (P1–P4, R1–R7, A1–A4), and so has the documentation (D1–D4).
-- Hermod bugs found here (H1, H2) are fixed in Hermod, not worked around in WWCP_S2 or here;
-  until then their tests carry a platform-conditional `Interop.KnownIssue` marker.
+- Hermod bugs found here are fixed in Hermod (H1 and H2 were: Hermod `483eb54`, `3d92759`),
+  not worked around in WWCP_S2 or here; until the pin bump their tests carry a
+  platform-conditional `Interop.KnownIssue` marker.
 - The `connect` cargo feature gates `s2energy-connection`, `stubs/zeroconf-tokio` replaces
   the Avahi/Bonjour binding. Do not patch s2-rust to make the crate build on Windows.
 - CI conventions follow the other OpenChargingCloud conformance suites (EEBUS, TOTP):

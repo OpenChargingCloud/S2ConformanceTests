@@ -7,11 +7,11 @@ issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-09-06: WWCP S2 `cc6f59b`, s2-python v0.10.0 (`ea46bde`), s2-rust `afedaa4`
-(2026-09, after 0.3.0), s2auth v0.1.0, s2-json v1.0.0 (`d58b2f0`), s2-connect v1.0
-(`d434762`), s2-documentation `0ba4f5c`; run on Windows 11 with the S2 Connect drivers of
-s2-rust inside WSL. 128 tests: 108 passed, 20 known issues, 0 failed. On Linux the four
-tests of the "WWCP RM → s2-python CEM" fixture are known issues as well (H1, H2).
+State on 2026-09-06: WWCP S2 `cc6f59b`, Hermod `3d92759`, s2-python v0.10.0 (`ea46bde`),
+s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0, s2-json v1.0.0 (`d58b2f0`),
+s2-connect v1.0 (`d434762`), s2-documentation `0ba4f5c`. 128 tests: 108 passed, 20 known
+issues, 0 failed — on Windows 11 with the S2 Connect drivers of s2-rust inside WSL, and on
+Linux (Debian 13 in WSL, everything native) since Hermod `3d92759` (H1, H2 below).
 
 ## The specification texts the tests hold the implementations to
 
@@ -229,13 +229,19 @@ Everything else agrees: the 36 messages, the fields and their optionality of eve
 object, the values of every other enumeration; and WWCP S2 accepts every documented
 enumeration value the schemas have.
 
-## Hermod (the WebSocket client on Linux)
+## Hermod (the WebSocket client on Linux) — fixed
 
-Found by running the suite on Linux (the Debian leg of the CI, reproduced in WSL); Hermod is a
-submodule here and is fixed in its own repository. Until then the affected tests carry a
-marker that is evaluated on Linux only.
+Found by the first Linux leg of the CI (reproduced in WSL, pinned down with strace: the
+upgrade request left the client as `GET / HTTP/1.1\n…`). Both are fixed in Hermod, with
+regression tests — H2 in `483eb54` ("HTTP: end the request and status lines with CRLF on
+every platform", which also covers the status line of Hermod's HTTP *servers* and their
+Connection/Transfer-Encoding rewriting), H1 in `3d92759` ("WebSocket: Connect returns as soon
+as the connection attempt has ended") — and the Hermod pin here is `3d92759`. The
+platform-conditional `Interop.KnownIssue` markers the "WWCP RM → s2-python CEM" fixture
+carried in the meantime are gone; the whole suite passes on Linux now. Kept as the record of
+what the Debian leg found on its first day.
 
-| # | Finding | Test | Where in Hermod |
+| # | Finding (as found, Hermod `368fa17`) | Test | Where in Hermod |
 |---|---|---|---|
 | H1 | `WebSocketClient.Connect` waits for the whole request timeout (10 minutes by default) when its networking task ends without a response: after an exception it closes the connection, leaves the loop (no reconnect policy) and never assigns `waitingForHTTPResponse`, so the caller polls until the timeout and gets a synthetic 400 "Timeout of … seconds reached!!!". Every failed upgrade costs the full timeout; the fixtures pass a 10 s timeout for that reason. | `PythonCEMAgainstWWCPRMTests` (all tests, Linux) | `HTTP1/WebSocket/Client/WebSocketClient.cs` (`Connect`: the `while (waitingForHTTPResponse is null && ts + RequestTimeout > Timestamp.Now)` loop after the `Task.Run`) |
 | H2 | `HTTPRequest.Builder` joins the request line and the header fields with `Environment.NewLine`, so on Linux the upgrade request starts with `GET / HTTP/1.1\n` — a bare line feed where RFC 7230 requires CRLF (the header fields keep their CRLF). s2-python's `websockets` server rejects it ("line without CRLF") and closes the connection; with H1 the client then waits for its timeout. **Consequence for WWCP S2**: `S2WebSocketClient` (and every Hermod client request built through the builder) cannot connect to a strict server from Linux; the WWCP S2 → s2-python sessions of the suite are known issues on Linux until Hermod is fixed. | `PythonCEMAgainstWWCPRMTests` (all tests, Linux) | `HTTP1/Request/HTTPRequestBuilder.cs` (`EntireRequestHeader => $"{HTTPRequestLine}{Environment.NewLine}{ConstructedHTTPHeader}"`) |
@@ -247,5 +253,6 @@ the upstream behaviour changed; remove its `Interop.KnownIssue` marker, move the
 "Confirmed to work" here and note the version. The `upstream-drift.yml` workflow runs the suite
 against the upstream default branches of s2-python, s2-rust and s2auth, and the specification
 tests against those of s2-json, s2-connect and s2-documentation, every night, so such a change
-shows up there first, before any pin is bumped. H1 and H2 are evaluated on Linux only: the
-markers fail there once Hermod is fixed and its pin bumped.
+shows up there first, before any pin is bumped. A Hermod or Styx defect found here is fixed
+there and the pin bumped (H1 and H2 were); until then its tests carry a marker, evaluated on
+the platform where the defect shows.
