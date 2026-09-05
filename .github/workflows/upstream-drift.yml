@@ -2,7 +2,8 @@ name: Upstream drift
 
 # The third workflow, and the only one that does not test what this repository says it
 # tests. ci.yml and nightly.yml both build against the submodule PINS: whatever SHA
-# libs/WWCP_S2, libs/Hermod, libs/Styx, libs/s2-python and libs/s2-rust are frozen at.
+# libs/WWCP_S2, libs/Hermod, libs/Styx, the reference implementations (s2-python, s2-rust,
+# s2auth) and the normative material (s2-json, s2-connect, s2-documentation) are frozen at.
 # That is the right thing for a gate — it is reproducible, and a red run is unambiguously
 # about code somebody here wrote.
 #
@@ -12,17 +13,21 @@ name: Upstream drift
 # submodules to their upstream default branches first and then runs the suite, so that
 # breakage is reported the night it lands, against a single day of upstream history.
 #
-# For this repository that cuts both ways, and the two jobs below keep the two apart:
+# For this repository that cuts three ways, and the three jobs below keep them apart:
 #
 #   dotnet-stack red              -> WWCP S2, Hermod or Styx moved and the suite does not
 #                                    survive it yet. Queued before the next pin bump.
-#   reference-implementations red -> s2-python or s2-rust changed. Either they broke
-#                                    something the suite relies on — or they FIXED one of
-#                                    the findings in FINDINGS.md: every known issue is
-#                                    pinned by an Interop.KnownIssue marker that fails the
-#                                    moment upstream stops reproducing it, naming the
+#   reference-implementations red -> s2-python, s2-rust or s2auth changed. Either they
+#                                    broke something the suite relies on — or they FIXED
+#                                    one of the findings in FINDINGS.md: every known issue
+#                                    is pinned by an Interop.KnownIssue marker that fails
+#                                    the moment upstream stops reproducing it, naming the
 #                                    marker to remove. That failure is the point of the
 #                                    marker, and this is the workflow that raises it.
+#   specification red             -> the S2 JSON schemas, the S2 Connect OpenAPI files or
+#                                    the structured documentation moved: WWCP S2's embedded
+#                                    copy is behind the standard, or the documentation and
+#                                    the schemas disagree in a new way.
 #
 # Why this is NOT a job inside nightly.yml, which is where it would naturally live:
 # because the two answer different questions and only one of them is about us. Hermod and
@@ -92,13 +97,14 @@ jobs:
       # The point of the whole workflow. Two things worth knowing about this step:
       #
       #  * The default branch is read from the remote (git ls-remote --symref), not
-      #    hardcoded to "master". These three do use master today — s2-python and s2-rust
-      #    in the job below do NOT, they use "main" — and a repository that renames its
+      #    hardcoded to "master". These three do use master today — the reference
+      #    implementations in the job below do NOT, they use "main" — and a repository that renames its
       #    default branch should make this workflow follow, not fail.
-      #  * Only the .NET submodules move here. s2-python and s2-rust stay pinned on
-      #    purpose, so that a red run in this job means "our stack or its foundations
-      #    changed" and nothing else. Drifting both at once would produce a failure with
-      #    two candidate causes, which is the one thing a drift report must not do.
+      #  * Only the .NET submodules move here. The reference implementations and the
+      #    specification material stay pinned on purpose, so that a red run in this job
+      #    means "our stack or its foundations changed" and nothing else. Drifting several
+      #    at once would produce a failure with two candidate causes, which is the one
+      #    thing a drift report must not do.
       - name: Move the .NET submodules to their upstream default branch
         shell: bash
         run: |
@@ -165,16 +171,16 @@ jobs:
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-interop.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-interop.trx" --results-directory artifacts
 
       # Two steps on Windows, see ci.yml.
-      - name: Interoperability tests against s2-python
+      - name: Interoperability tests against s2-python and s2auth, specification tests
         if: runner.os == 'Windows'
         timeout-minutes: 30
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python|TestCategory=s2auth|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
 
       - name: Interoperability tests against s2-rust (message layer)
         if: runner.os == 'Windows'
@@ -195,7 +201,7 @@ jobs:
 
 
   reference-implementations:
-    name: Against upstream s2-python/s2-rust
+    name: Against upstream s2-python/s2-rust/s2auth
     runs-on: ubuntu-latest
     container: debian:13
     # Debian only: this is the leg that runs the whole suite, S2 Connect included, and a
@@ -221,10 +227,10 @@ jobs:
           submodules: recursive
 
       # Only the reference implementations move here — the .NET side stays pinned on
-      # purpose, so that a red run in this job means "s2-python or s2-rust changed" and
-      # nothing else. Note what the pins are: s2-python sits on a release tag (v0.10.0),
-      # s2-rust on a commit of main, and both default branches are "main" — read from the
-      # remote rather than hardcoded, as in the job above.
+      # purpose, so that a red run in this job means "s2-python, s2-rust or s2auth changed"
+      # and nothing else. Note what the pins are: s2-python and s2auth sit on release tags
+      # (v0.10.0, v0.1.0), s2-rust on a commit of main, and all three default branches are
+      # "main" — read from the remote rather than hardcoded, as in the job above.
       - name: Move the reference implementations to their upstream default branch
         shell: bash
         run: |
@@ -235,7 +241,7 @@ jobs:
             echo "|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for module in s2-python s2-rust; do
+          for module in s2-python s2-rust s2auth; do
           (
             cd "libs/$module"
             pinned=$(git rev-parse --short HEAD)
@@ -278,7 +284,7 @@ jobs:
       # as a failed exchange the night it is committed, which is the only moment when the
       # upstream commit that caused it is still obvious. So does a fix: a known issue that
       # stops reproducing fails its Interop.KnownIssue marker, and FINDINGS.md says what to
-      # do then.
+      # do then. The specification tests stay out: their pins did not move in this job.
       - name: Interoperability tests
         timeout-minutes: 30
         env:
@@ -291,4 +297,79 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: drift-results-reference-implementations
+          path: artifacts/*.trx
+
+
+  specification:
+    name: Against upstream s2-json/s2-connect/s2-documentation
+    runs-on: ubuntu-latest
+    container: debian:13
+    # The normative material: the S2 JSON schemas WWCP S2 embeds and validates against, the
+    # S2 Connect OpenAPI files its data structures quote, and the structured documentation
+    # of the data model. No toolchain beyond .NET: the Specification category compares
+    # files and types and starts no peer.
+
+    steps:
+
+      - name: Install prerequisites (Debian container)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git libicu76 libssl3t64 libstdc++6 tzdata
+          git config --global --add safe.directory '*'
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # s2-json and s2-connect sit on release tags (v1.0.0, v1.0), s2-documentation on a
+      # commit of main. A red here after s2-json or s2-connect moved says the standard
+      # changed and WWCP S2's embedded copy (and its THIRD-PARTY-NOTICES.md) has to follow;
+      # a red after s2-documentation moved says the documentation and the schemas disagree
+      # in a new way (the known ones are D1 to D4 in FINDINGS.md), or that WWCP S2 lacks a
+      # newly documented enumeration value.
+      - name: Move the specification submodules to their upstream default branch
+        shell: bash
+        run: |
+          {
+            echo "## Upstream drift (specification)"
+            echo
+            echo "| Submodule | Pinned | Upstream | Moved |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for module in s2-json s2-connect s2-documentation; do
+          (
+            cd "libs/$module"
+            pinned=$(git rev-parse --short HEAD)
+            branch=$(git ls-remote --symref origin HEAD | awk '/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }')
+            echo "::group::$module -> origin/$branch"
+            git fetch --depth 1 origin "$branch"
+            git checkout --force --detach FETCH_HEAD
+            git --no-pager log -1 --format='%h %ad %an: %s' --date=short
+            echo "::endgroup::"
+            upstream=$(git rev-parse --short HEAD)
+            if [ "$pinned" = "$upstream" ]; then moved="no"; else moved="**yes**"; fi
+            echo "| $module | \`$pinned\` | \`$upstream\` ($branch) | $moved |" >> "$GITHUB_STEP_SUMMARY"
+          )
+          done
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      - name: Specification tests
+        timeout-minutes: 15
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-specification.trx" --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: drift-results-specification
           path: artifacts/*.trx

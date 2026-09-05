@@ -319,7 +319,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
 
                     }
 
-                    throw new InvalidOperationException($"[{Name}] exited with code {process.ExitCode} before '{Description ?? "the awaited event"}' arrived.{Environment.NewLine}{Diagnostics}");
+                    throw new InvalidOperationException($"[{Name}] exited with code {process.ExitCode} before '{Description ?? "the awaited event"}' arrived.{Environment.NewLine}Events:{Environment.NewLine}{String.Join(Environment.NewLine, Events.Select(e => e.ToString(Formatting.None)))}{Environment.NewLine}{Diagnostics}");
 
                 }
 

@@ -53,6 +53,23 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         }
 
         /// <summary>
+        /// Make sure s2auth is usable; skips the fixture (Assert.Ignore) when the toolchain
+        /// is missing and S2_INTEROP_REQUIRE is not set.
+        /// </summary>
+        public static async Task RequireS2AuthAsync()
+        {
+            try
+            {
+                await S2AuthHarness.EnsureReadyAsync();
+                TestContext.Progress.WriteLine($"[s2auth] s2auth {S2AuthHarness.S2AuthVersion}");
+            }
+            catch (ToolchainMissingException e) when (!Toolchains.Required)
+            {
+                Assert.Ignore("s2auth tests skipped: " + e.Message);
+            }
+        }
+
+        /// <summary>
         /// Make sure the s2-rust harness is built for the given driver; skips the fixture
         /// (Assert.Ignore) when cargo (or, for the S2 Connect drivers on Windows, WSL with
         /// cargo) is missing and S2_INTEROP_REQUIRE is not set.

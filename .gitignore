@@ -9,6 +9,7 @@ TestResults/
 
 # Python (the s2-python virtual environment created by the interop harness)
 .venv-s2python/
+.venv-s2auth/
 __pycache__/
 *.pyc
 

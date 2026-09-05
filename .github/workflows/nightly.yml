@@ -117,17 +117,17 @@ jobs:
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-interop.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-interop.trx" --results-directory artifacts
 
-      # Two steps on Windows, see ci.yml: s2-python must not skip, the S2 Connect fixtures
-      # of s2-rust have to (no WSL on a hosted runner).
-      - name: Interoperability tests against s2-python
+      # Two steps on Windows, see ci.yml: s2-python and s2auth must not skip, the S2 Connect
+      # fixtures of s2-rust have to (no WSL on a hosted runner).
+      - name: Interoperability tests against s2-python and s2auth, specification tests
         if: runner.os == 'Windows'
         timeout-minutes: 30
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python|TestCategory=s2auth|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
 
       - name: Interoperability tests against s2-rust (message layer)
         if: runner.os == 'Windows'

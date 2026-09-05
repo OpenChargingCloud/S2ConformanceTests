@@ -53,6 +53,36 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Path.Combine(Libs, "s2-rust");
 
         /// <summary>
+        /// libs/s2auth: the Python implementation of S2 Connect pairing and session initiation.
+        /// </summary>
+        public static String  S2Auth
+            => Path.Combine(Libs, "s2auth");
+
+        /// <summary>
+        /// libs/s2-json: the normative S2 JSON schemas.
+        /// </summary>
+        public static String  S2Json
+            => Path.Combine(Libs, "s2-json");
+
+        /// <summary>
+        /// libs/s2-connect: the normative S2 Connect OpenAPI files.
+        /// </summary>
+        public static String  S2Connect
+            => Path.Combine(Libs, "s2-connect");
+
+        /// <summary>
+        /// libs/s2-documentation: the S2 documentation with the structured data model documentation.
+        /// </summary>
+        public static String  S2Documentation
+            => Path.Combine(Libs, "s2-documentation");
+
+        /// <summary>
+        /// libs/WWCP_S2: the stack under test.
+        /// </summary>
+        public static String  WWCP_S2
+            => Path.Combine(Libs, "WWCP_S2");
+
+        /// <summary>
         /// The Python driver scripts (tools/s2-python-harness).
         /// </summary>
         public static String  PythonHarness
@@ -65,6 +95,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Path.Combine(Root.FullName, "tools", "s2-rust-harness");
 
         /// <summary>
+        /// tools/s2auth-harness: the s2auth drivers.
+        /// </summary>
+        public static String  S2AuthHarness
+            => Path.Combine(Root.FullName, "tools", "s2auth-harness");
+
+        /// <summary>
         /// The Python virtual environment with s2-python installed; overridable
         /// with the environment variable S2_INTEROP_VENV.
         /// </summary>
@@ -72,6 +108,14 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Environment.GetEnvironmentVariable("S2_INTEROP_VENV") is { Length: > 0 } venv
                    ? venv
                    : Path.Combine(Root.FullName, ".venv-s2python");
+
+        /// <summary>
+        /// The virtual environment s2auth is installed into (S2_INTEROP_S2AUTH_VENV, default .venv-s2auth).
+        /// </summary>
+        public static String  S2AuthVenv
+            => Environment.GetEnvironmentVariable("S2_INTEROP_S2AUTH_VENV") is { Length: > 0 } venv
+                   ? venv
+                   : Path.Combine(Root.FullName, ".venv-s2auth");
 
 
         private static DirectoryInfo FindRoot()

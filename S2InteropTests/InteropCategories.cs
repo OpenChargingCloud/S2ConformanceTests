@@ -41,6 +41,17 @@ namespace cloud.charging.open.protocols.S2.InteropTests
         /// </summary>
         public const String Rust     = "s2-rust";
 
+        /// <summary>
+        /// Tests against s2auth, the Python S2 Connect implementation (libs/s2auth).
+        /// </summary>
+        public const String S2Auth   = "s2auth";
+
+        /// <summary>
+        /// Tests holding WWCP S2 to the pinned specification material (libs/s2-json,
+        /// libs/s2-connect, libs/s2-documentation); no external toolchain needed.
+        /// </summary>
+        public const String Specification = "Specification";
+
     }
 
 }

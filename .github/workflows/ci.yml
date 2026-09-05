@@ -147,19 +147,20 @@ jobs:
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-interop.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-interop.trx" --results-directory artifacts
 
       # Windows in two steps, because S2_INTEROP_REQUIRE is all or nothing: the s2-python
-      # fixtures must not be allowed to skip (a missing interpreter would otherwise pass
-      # this leg with nothing tested), while the S2 Connect fixtures of s2-rust have to —
-      # they need WSL, and a hosted runner has none. The message-layer tests of s2-rust run.
-      - name: Interoperability tests against s2-python
+      # and s2auth fixtures must not be allowed to skip (a missing interpreter would
+      # otherwise pass this leg with nothing tested), while the S2 Connect fixtures of
+      # s2-rust have to — they need WSL, and a hosted runner has none. The message-layer
+      # tests of s2-rust run. The specification tests need no toolchain at all.
+      - name: Interoperability tests against s2-python and s2auth, specification tests
         if: runner.os == 'Windows'
         timeout-minutes: 30
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python|TestCategory=s2auth|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
 
       - name: Interoperability tests against s2-rust (message layer)
         if: runner.os == 'Windows'

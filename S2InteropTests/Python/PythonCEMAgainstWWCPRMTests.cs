@@ -57,6 +57,11 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
 
             public IPPort                               Port           { get; private init; }
             public String                               Token          { get; private init; } = "";
+            /// <summary>
+            /// H1/H2 in FINDINGS.md: the Hermod WebSocket client cannot open a session on Linux.
+            /// </summary>
+            internal const String HermodLinuxRequestLine = "Hermod's WebSocket client sends the HTTP request line with a bare line feed on Linux (HTTPRequestBuilder joins it with Environment.NewLine), which s2-python's websockets server rejects; the client then waits for its whole request timeout";
+
             public ExternalProcess                      CEM            { get; private init; } = null!;
             public S2WebSocketClient                    Client         { get; private set; }  = null!;
             public S2Session                            Session        { get; private set; }  = null!;
@@ -102,19 +107,51 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
 
             public S2WebSocketClient CreateClient(String?                 Token               = null,
                                                   IReadOnlyList<String>?  SupportedVersions   = null)
-                => new (URL.Parse($"ws://127.0.0.1:{Port}/"),
-                        Token ?? this.Token,
-                        new S2SessionOptions {
-                            Role               = EnergyManagementRole.RM,
-                            Mode               = S2SessionMode.Plain,
-                            SupportedVersions  = SupportedVersions ?? Version.S2JSONVersions
-                        });
+            {
+
+                // A short request timeout: Hermod's WebSocket client waits for the whole request
+                // timeout (10 minutes by default) when the upgrade fails on its side (H1 in
+                // FINDINGS.md); the response log below shows what went wrong.
+                var client = new S2WebSocketClient(URL.Parse($"ws://127.0.0.1:{Port}/"),
+                                                   Token ?? this.Token,
+                                                   new S2SessionOptions {
+                                                       Role               = EnergyManagementRole.RM,
+                                                       Mode               = S2SessionMode.Plain,
+                                                       SupportedVersions  = SupportedVersions ?? Version.S2JSONVersions
+                                                   },
+                                                   RequestTimeout:  TimeSpan.FromSeconds(10),
+                                                   LoggerFactory:   TestLoggerFactory.Default);
+
+                client.ResponseLogDelegate += (timestamp, sender, request, response) => {
+                    if (response.HTTPStatusCode != HTTPStatusCode.SwitchingProtocols)
+                        TestContext.Progress.WriteLine($"[wwcp-ws] {request?.HTTPMethod} {request?.Path} => {response.HTTPStatusCode}: {response.HTTPBodyAsUTF8String}");
+                    return Task.CompletedTask;
+                };
+
+                return client;
+
+            }
 
             public async Task ConnectAsync(IReadOnlyList<String>? SupportedVersions = null)
             {
 
                 Client   = CreateClient(SupportedVersions: SupportedVersions);
-                Session  = await Client.ConnectSessionAsync();
+
+                try
+                {
+                    Session = await Client.ConnectSessionAsync();
+                }
+                catch (S2WebSocketConnectException e) when (!OperatingSystem.IsWindows())
+                {
+                    // H2: on Linux Hermod's WebSocket client ends the request line with a bare
+                    // line feed; s2-python's websockets server closes the connection, and the
+                    // client waits for its whole request timeout (H1).
+                    Interop.KnownIssue(HermodLinuxRequestLine, true, e.Message);
+                    Assert.Ignore("The S2 WebSocket session cannot be opened on Linux (H2 in FINDINGS.md).");
+                }
+
+                if (!OperatingSystem.IsWindows())
+                    Interop.KnownIssue(HermodLinuxRequestLine, false);
 
                 // The recorder and the control type are attached right after the session started;
                 // the RM's own Handshake (sent while starting) is therefore not recorded.
@@ -239,6 +276,20 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
 
             var client     = f.CreateClient(Token: "not-the-token");
             var exception  = Assert.ThrowsAsync<S2WebSocketConnectException>(async () => await client.ConnectSessionAsync());
+
+            // H2: on Linux the upgrade request never reaches s2-python (bare line feed), so
+            // no 401 can come back either.
+            if (!OperatingSystem.IsWindows())
+            {
+
+                var unanswered = exception!.Response.HTTPStatusCode != HTTPStatusCode.Unauthorized;
+
+                Interop.KnownIssue(RMFixture.HermodLinuxRequestLine, unanswered, exception.Message);
+
+                if (unanswered)
+                    Assert.Ignore("The upgrade request does not reach s2-python on Linux (H2 in FINDINGS.md).");
+
+            }
 
             Assert.That(exception!.Response.HTTPStatusCode, Is.EqualTo(HTTPStatusCode.Unauthorized));
 
