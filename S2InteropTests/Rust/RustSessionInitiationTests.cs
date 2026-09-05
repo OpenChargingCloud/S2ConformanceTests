@@ -284,7 +284,9 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Rust
 
             var host = await RustHarness.HostAddressForDriverAsync(CommunicationClient);
 
-            using var certificate = ServerCertificate.Create("wwcp-cem.local", [ System.Net.IPAddress.Parse(host) ]);
+            // The certificate WWCP S2 issues for a LAN endpoint (SelfSignedCA, D13); the s2-rust
+            // communication client trusts it as an extra root and accepts it as an end entity.
+            using var certificate = ServerCertificate.FromWWCP("wwcp-cem.local", [ System.Net.IPAddress.Parse(host) ]);
 
             var httpPort      = Interop.FreePort();
             var wsPort        = Interop.FreePort();

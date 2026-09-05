@@ -43,59 +43,12 @@ v1.0.0 schemas (`TrafficRecorder`), and the tests check that each message gets e
 
 ## Findings
 
-State on 2026-09-05 (WWCP S2 `cc6f59b`, s2-python v0.10.0, s2-rust `afedaa4`), run on Windows 11
-with the S2 Connect drivers in WSL: 110 tests, 95 passed, 15 known issues, 0 failed.
-
-Everything below is reproduced by a test; the known issues are marked with
-`Interop.KnownIssue(...)` and end with a warning (shown as skipped/warning by the test adapter)
-while they exist – they fail once the upstream behaviour changes, so that the marker is removed
-and the fix recorded.
-
-**s2-python 0.10.0**
-
-* `PPBCPowerSequenceContainerStatus.progress` is declared as `uuid.UUID` although the schema
-  defines a `Duration`; every `PPBC.PowerProfileStatus` with a progress is rejected.
-* The DDBC models deviate from s2-json v1.0.0: `DDBC.OperationMode` requires `id` next to the
-  schema's `Id` and a list for `supply_range`, `DDBC.SystemDescription` requires a
-  `present_demand_rate` field, and the message `DDBC.PresentDemandStatus` does not exist.
-* The range of `operation_mode_factor` (0 to 1) is not enforced.
-* s2-python sends no `ReceptionStatus` for messages without a registered handler and gives up on
-  a connection after 5 s without a `ReceptionStatus` (WWCP S2 accounts for both).
-* Python 3.14 is not supported yet (`requires-python < 3.14`); the tests create the venv from
-  the newest 3.9–3.13 interpreter they find.
-
-**s2-rust (main, 2026-09)**
-
-* The pairing token is decoded as Base64 (`PairingToken::from_str`) instead of being used as the
-  ASCII bytes of its text, which S2 Connect 1.0.0 prescribes ("the pairing token and domain name
-  are strings, which need to be converted into binary data using the ASCII table"); tokens whose
-  length is not a multiple of four cannot be parsed at all. The tests hand the ASCII bytes to
-  s2-rust through its `PairingToken(Box<[u8]>)` constructor, with which the LAN pairing of the
-  WWCP S2 client with the s2-rust server succeeds.
-* WAN pairing servers compute `R = HMAC(C, T)` instead of `R = HMAC(C, T || D)`.
-* The pairing client selects the challenge-response formula solely from the host of the pairing
-  URL (`.local` → LAN, anything else including IP addresses → WAN), not from the deployment the
-  server announces.
-* For `.local` pairing URLs the client trusts only a root certificate the server transmits as
-  the last element of its TLS chain (trust on first use) and has no trust anchor otherwise, so a
-  server presenting a self-signed leaf alone fails the TLS handshake. Hermod's TLS server sends
-  only the leaf (WWCP S2 decision D13), so the LAN pairing s2-rust → WWCP S2 cannot complete
-  today; session initiation and the WebSocket session in that direction (extra roots given to the
-  client) work. rustls does accept WWCP S2's self-signed LAN certificate as an end entity; a
-  certificate with BasicConstraints CA:TRUE would be rejected (`CaUsedAsEndEntity`).
-* The `Message` enum has no `DDBC.PresentDemandStatus`, and `DDBC.SystemDescription` requires a
-  `present_demand_rate` field that v1.0.0 does not define.
-* Semantic rules of the schema descriptions (`start_of_range ≤ end_of_range`,
-  `operation_mode_factor` in 0..1) are not enforced.
-* `s2energy-connection` only builds on Unix (`tokio::net::unix`), and its mDNS dependency
-  `zeroconf-tokio` needs the Avahi headers (Linux) or libclang plus the Bonjour SDK (Windows).
-  The harness replaces `zeroconf-tokio` with a stub (`tools/s2-rust-harness/stubs`; discovery is
-  not under test) and, on Windows, builds and runs the S2 Connect drivers inside WSL.
-
-**Confirmed to work** (WWCP S2 ↔ s2-rust over real TLS): LAN pairing with the WWCP S2 client,
-session initiation with access token rotation, the WebSocket session with `ResourceManagerDetails`,
-`SelectControlType`, the FRBC system description, an instruction and its `InstructionStatusUpdate`,
-and unpairing, in both directions (session initiation) respectively from the WWCP S2 side (pairing).
+[FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and s2-rust, with the
+test that reproduces each finding, the place in the reference implementation and the consequence
+for WWCP S2. State on 2026-09-05: 110 tests, 95 passed, 15 known issues, 0 failed. Known issues
+are marked in their tests with `Interop.KnownIssue(...)`: they end with a warning while the issue
+exists and fail once the upstream behaviour changes, so that the marker gets removed and the fix
+recorded.
 
 ## Running the tests
 
