@@ -1,0 +1,294 @@
+name: Upstream drift
+
+# The third workflow, and the only one that does not test what this repository says it
+# tests. ci.yml and nightly.yml both build against the submodule PINS: whatever SHA
+# libs/WWCP_S2, libs/Hermod, libs/Styx, libs/s2-python and libs/s2-rust are frozen at.
+# That is the right thing for a gate — it is reproducible, and a red run is unambiguously
+# about code somebody here wrote.
+#
+# It also means a change upstream is invisible until somebody bumps a pin, and then it
+# arrives as "the pin bump broke everything" days or weeks after the commit that actually
+# did it, with a whole range of upstream commits to bisect. This workflow moves the
+# submodules to their upstream default branches first and then runs the suite, so that
+# breakage is reported the night it lands, against a single day of upstream history.
+#
+# For this repository that cuts both ways, and the two jobs below keep the two apart:
+#
+#   dotnet-stack red              -> WWCP S2, Hermod or Styx moved and the suite does not
+#                                    survive it yet. Queued before the next pin bump.
+#   reference-implementations red -> s2-python or s2-rust changed. Either they broke
+#                                    something the suite relies on — or they FIXED one of
+#                                    the findings in FINDINGS.md: every known issue is
+#                                    pinned by an Interop.KnownIssue marker that fails the
+#                                    moment upstream stops reproducing it, naming the
+#                                    marker to remove. That failure is the point of the
+#                                    marker, and this is the workflow that raises it.
+#
+# Why this is NOT a job inside nightly.yml, which is where it would naturally live:
+# because the two answer different questions and only one of them is about us. Hermod and
+# Styx are foundations under active development, and the reference implementations move
+# on their own schedule. Folding that into the nightly badge would make it red for reasons
+# nobody here can fix, and a badge that is red for reasons nobody can fix stops being
+# read. Separate badge, separate question, both readable.
+#
+# Scheduled workflows only ever run on the default branch, and GitHub disables them after
+# 60 days without any repository activity. If this stops reporting, check that first.
+on:
+  schedule:
+    # 04:23 UTC, after nightly.yml (03:47) has had a go at the pinned state, and not
+    # 04:13, when EEBUSConformanceTests asks the same question. When both are red on the
+    # same morning, read the nightly first: if the pins are broken, drift being broken too
+    # says nothing new.
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-drift-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  dotnet-stack:
+    name: Against upstream WWCP_S2/Hermod/Styx (${{ matrix.leg }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    # Both legs, same matrix as ci.yml and nightly.yml. A drift run on one platform would
+    # answer "does upstream still compile and pass" but not "does it still pass on
+    # Windows", and finding that out only after the pin bump is exactly the delay this
+    # workflow exists to remove.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            container: debian:13
+            leg: debian-13-container
+          - os: windows-latest
+            leg: windows-latest
+
+    steps:
+
+      # Before the checkout: the bare debian:13 image has no git, and this workflow needs
+      # it for far more than the checkout — every submodule here gets fetched and moved by
+      # hand below. See ci.yml for what the remaining packages are for.
+      - name: Install prerequisites (Debian container)
+        if: runner.os == 'Linux'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git gcc libc6-dev libicu76 libssl3t64 libstdc++6 tzdata \
+            python3 python3-venv
+          git config --global --add safe.directory '*'
+
+      - name: Map wwcp-cem.local to loopback (Debian container)
+        if: runner.os == 'Linux'
+        run: echo "127.0.0.1 wwcp-cem.local" >> /etc/hosts
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # The point of the whole workflow. Two things worth knowing about this step:
+      #
+      #  * The default branch is read from the remote (git ls-remote --symref), not
+      #    hardcoded to "master". These three do use master today — s2-python and s2-rust
+      #    in the job below do NOT, they use "main" — and a repository that renames its
+      #    default branch should make this workflow follow, not fail.
+      #  * Only the .NET submodules move here. s2-python and s2-rust stay pinned on
+      #    purpose, so that a red run in this job means "our stack or its foundations
+      #    changed" and nothing else. Drifting both at once would produce a failure with
+      #    two candidate causes, which is the one thing a drift report must not do.
+      - name: Move the .NET submodules to their upstream default branch
+        shell: bash
+        run: |
+          {
+            echo "## Upstream drift (${{ matrix.leg }})"
+            echo
+            echo "| Submodule | Pinned | Upstream | Moved |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for module in Styx Hermod WWCP_S2; do
+          (
+            cd "libs/$module"
+            pinned=$(git rev-parse --short HEAD)
+            branch=$(git ls-remote --symref origin HEAD | awk '/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }')
+            echo "::group::$module -> origin/$branch"
+            git fetch --depth 1 origin "$branch"
+            git checkout --force --detach FETCH_HEAD
+            git --no-pager log -1 --format='%h %ad %an: %s' --date=short
+            echo "::endgroup::"
+            upstream=$(git rev-parse --short HEAD)
+            if [ "$pinned" = "$upstream" ]; then moved="no"; else moved="**yes**"; fi
+            echo "| $module | \`$pinned\` | \`$upstream\` ($branch) | $moved |" >> "$GITHUB_STEP_SUMMARY"
+          )
+          done
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Python
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/s2-rust-harness
+
+      - name: Build the s2-rust drivers
+        working-directory: tools/s2-rust-harness
+        shell: bash
+        run: cargo build --release ${{ runner.os == 'Linux' && '--features connect' || '' }}
+
+      # A failure here is as much of a finding as a failed test, and a more common one:
+      # a renamed type or a changed signature in Hermod or WWCP S2 breaks the build long
+      # before it breaks an assertion.
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      - name: Test the S2 protocol stack
+        timeout-minutes: 30
+        run: dotnet test libs/WWCP_S2/WWCP_S2Tests/WWCP_S2Tests.csproj --configuration Release --no-build --filter "TestCategory!=Timing&TestCategory!=Multicast&TestCategory!=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-stack.trx" --results-directory artifacts
+
+      - name: Interoperability tests
+        if: runner.os == 'Linux'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-interop.trx" --results-directory artifacts
+
+      # Two steps on Windows, see ci.yml.
+      - name: Interoperability tests against s2-python
+        if: runner.os == 'Windows'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+
+      - name: Interoperability tests against s2-rust (message layer)
+        if: runner.os == 'Windows'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-rust" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-rust.trx" --results-directory artifacts
+
+      # See ci.yml for why TRX and why !cancelled(). It matters more here than anywhere
+      # else: the .trx is what says WHICH test the upstream change broke, and that is the
+      # entire content of the bug report somebody is about to write upstream.
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: drift-results-${{ matrix.leg }}
+          path: artifacts/*.trx
+
+
+  reference-implementations:
+    name: Against upstream s2-python/s2-rust
+    runs-on: ubuntu-latest
+    container: debian:13
+    # Debian only: this is the leg that runs the whole suite, S2 Connect included, and a
+    # change in a reference implementation has nothing to do with Schannel.
+
+    steps:
+
+      # git before the checkout, see ci.yml for the rest.
+      - name: Install prerequisites (Debian container)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git gcc libc6-dev libicu76 libssl3t64 libstdc++6 tzdata \
+            python3 python3-venv
+          git config --global --add safe.directory '*'
+
+      - name: Map wwcp-cem.local to loopback (Debian container)
+        run: echo "127.0.0.1 wwcp-cem.local" >> /etc/hosts
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      # Only the reference implementations move here — the .NET side stays pinned on
+      # purpose, so that a red run in this job means "s2-python or s2-rust changed" and
+      # nothing else. Note what the pins are: s2-python sits on a release tag (v0.10.0),
+      # s2-rust on a commit of main, and both default branches are "main" — read from the
+      # remote rather than hardcoded, as in the job above.
+      - name: Move the reference implementations to their upstream default branch
+        shell: bash
+        run: |
+          {
+            echo "## Upstream drift (reference implementations)"
+            echo
+            echo "| Submodule | Pinned | Upstream | Moved |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          for module in s2-python s2-rust; do
+          (
+            cd "libs/$module"
+            pinned=$(git rev-parse --short HEAD)
+            branch=$(git ls-remote --symref origin HEAD | awk '/^ref:/ { sub("refs/heads/", "", $2); print $2; exit }')
+            echo "::group::$module -> origin/$branch"
+            git fetch --depth 1 origin "$branch"
+            git checkout --force --detach FETCH_HEAD
+            git --no-pager log -1 --format='%h %ad %an: %s' --date=short
+            echo "::endgroup::"
+            upstream=$(git rev-parse --short HEAD)
+            if [ "$pinned" = "$upstream" ]; then moved="no"; else moved="**yes**"; fi
+            echo "| $module | \`$pinned\` | \`$upstream\` ($branch) | $moved |" >> "$GITHUB_STEP_SUMMARY"
+          )
+          done
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # No Swatinem/rust-cache here, unlike the other workflows: its key is derived from
+      # Cargo.lock, which the build below is free to rewrite when upstream s2-rust changed
+      # its dependencies — nothing to hit, and a stale restore to risk. And no --locked for
+      # the same reason: the lock file describes the pinned s2-rust, not the one just
+      # checked out. A harness that no longer compiles against s2-rust's API is the first
+      # kind of finding this job produces.
+      - name: Build the s2-rust drivers
+        working-directory: tools/s2-rust-harness
+        run: cargo build --release --features connect
+
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      # This is the job that earns the workflow its keep. The suite talks S2 JSON and S2
+      # Connect to the reference implementations over loopback, so a change on their side
+      # — a stricter parser, a renamed field, a different ReceptionStatus — shows up here
+      # as a failed exchange the night it is committed, which is the only moment when the
+      # upstream commit that caused it is still obvious. So does a fix: a known issue that
+      # stops reproducing fails its Interop.KnownIssue marker, and FINDINGS.md says what to
+      # do then.
+      - name: Interoperability tests
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-reference-implementations.trx" --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: drift-results-reference-implementations
+          path: artifacts/*.trx

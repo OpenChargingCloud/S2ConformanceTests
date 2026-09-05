@@ -153,4 +153,6 @@ part of the system description; s2-rust shows the same shape (R6).
 
 When a submodule is bumped, run the suite: a known-issue test that turns into a failure means
 the upstream behaviour changed; remove its `Interop.KnownIssue` marker, move the finding to
-"Confirmed to work" here and note the version.
+"Confirmed to work" here and note the version. The `upstream-drift.yml` workflow runs the suite
+against the upstream default branches of s2-python and s2-rust every night, so such a change
+shows up there first, before any pin is bumped.

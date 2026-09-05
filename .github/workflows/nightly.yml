@@ -1,0 +1,145 @@
+name: Nightly
+
+# The counterpart to ci.yml. That workflow gates every push against the PINNED submodules,
+# and this one repeats exactly that on a night when nobody pushed at all. Still worth the
+# minutes, for two reasons:
+#
+#  * Two implementations talking over loopback is where timing flakiness lives — a child
+#    process that is not listening yet, a ReceptionStatus that arrives after the socket
+#    closed — and a nightly is the only place a once-in-twenty race ever shows up as a
+#    pattern rather than as "retry, it went green".
+#  * More moves here without a push than in most repositories: dtolnay/rust-toolchain
+#    resolves "stable" to whatever Rust released that week, Debian's python3 gets patch
+#    releases, "dotnet-version: 10.0.x" resolves to a new SDK patch, and the runner images
+#    change underneath all of it. A red here with a green CI on the same commit points at
+#    exactly that. Fatal: a red night is a real regression.
+#
+# What deliberately does NOT move here are the submodules — WWCP S2 and its foundations,
+# s2-python and s2-rust. Those are upstream-drift.yml's question, kept apart so that a red
+# nightly can only ever mean "our pinned state broke".
+#
+# Two things worth knowing about scheduled workflows: they only ever run on the default
+# branch, and GitHub disables them after 60 days without any repository activity. If this
+# stops reporting, that is the first thing to check.
+on:
+  schedule:
+    # 03:47 UTC. Not on the hour: GitHub's scheduler is busiest then and delays runs by
+    # tens of minutes. Also not 02:17 (Hermod), 03:29 (TOTPConformanceTests) or 03:37
+    # (EEBUSConformanceTests), which are when the neighbouring nightlies run.
+    - cron: '47 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  full-suite:
+    name: Full suite (${{ matrix.leg }})
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    # The same two-leg matrix as ci.yml: Debian 13 in a bare debian:13 container, and
+    # Windows. See ci.yml for why it is exactly these two — in short: production parity
+    # and the only place s2energy-connection builds on one side, Schannel/CryptoAPI on the
+    # other, with the S2 Connect fixtures skipping there for want of WSL.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            container: debian:13
+            leg: debian-13-container
+          - os: windows-latest
+            leg: windows-latest
+
+    steps:
+
+      # Before the checkout, because the bare debian:13 image has no git and
+      # actions/checkout would silently fall back to a REST tarball with no .git directory
+      # for the submodule step to work with. See ci.yml for the full reasoning and for what
+      # the remaining packages are for.
+      - name: Install prerequisites (Debian container)
+        if: runner.os == 'Linux'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git gcc libc6-dev libicu76 libssl3t64 libstdc++6 tzdata \
+            python3 python3-venv
+          git config --global --add safe.directory '*'
+
+      # See ci.yml: s2-rust picks the LAN challenge-response formula from the ".local"
+      # suffix, so the WWCP pairing server has to be reachable under that name.
+      - name: Map wwcp-cem.local to loopback (Debian container)
+        if: runner.os == 'Linux'
+        run: echo "127.0.0.1 wwcp-cem.local" >> /etc/hosts
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Setup Python
+        if: runner.os == 'Windows'
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache the Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/s2-rust-harness
+
+      - name: Build the s2-rust drivers
+        working-directory: tools/s2-rust-harness
+        shell: bash
+        run: cargo build --release ${{ runner.os == 'Linux' && '--features connect' || '' }}
+
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      # The same set the gate runs, see ci.yml for the filter.
+      - name: Test the S2 protocol stack
+        timeout-minutes: 30
+        run: dotnet test libs/WWCP_S2/WWCP_S2Tests/WWCP_S2Tests.csproj --configuration Release --no-build --filter "TestCategory!=Timing&TestCategory!=Multicast&TestCategory!=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-stack.trx" --results-directory artifacts
+
+      - name: Interoperability tests
+        if: runner.os == 'Linux'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-interop.trx" --results-directory artifacts
+
+      # Two steps on Windows, see ci.yml: s2-python must not skip, the S2 Connect fixtures
+      # of s2-rust have to (no WSL on a hosted runner).
+      - name: Interoperability tests against s2-python
+        if: runner.os == 'Windows'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+
+      - name: Interoperability tests against s2-rust (message layer)
+        if: runner.os == 'Windows'
+        timeout-minutes: 30
+        env:
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-rust" --logger "console;verbosity=normal" --logger "trx;LogFileName=nightly-${{ matrix.leg }}-s2-rust.trx" --results-directory artifacts
+
+      # See ci.yml for why TRX and why !cancelled().
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-test-results-${{ matrix.leg }}
+          path: artifacts/*.trx
