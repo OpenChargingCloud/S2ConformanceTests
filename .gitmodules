@@ -1,0 +1,15 @@
+[submodule "libs/WWCP_S2"]
+	path = libs/WWCP_S2
+	url = https://github.com/OpenChargingCloud/WWCP_S2.git
+[submodule "libs/s2-python"]
+	path = libs/s2-python
+	url = https://github.com/flexiblepower/s2-python.git
+[submodule "libs/s2-rust"]
+	path = libs/s2-rust
+	url = https://github.com/flexiblepower/s2-rust.git
+[submodule "libs/Styx"]
+	path = libs/Styx
+	url = https://github.com/Vanaheimr/Styx.git
+[submodule "libs/Hermod"]
+	path = libs/Hermod
+	url = https://github.com/Vanaheimr/Hermod.git

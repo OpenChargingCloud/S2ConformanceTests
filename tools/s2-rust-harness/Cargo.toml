@@ -1,0 +1,76 @@
+# The Rust side of the WWCP S2 interoperability tests: small command-line drivers around the
+# s2-rust crates (libs/s2-rust) that the NUnit tests in S2InteropTests start as child processes.
+# Every driver talks JSON lines on stdin/stdout so that the tests can script and observe it.
+#
+# s2energy-connection (S2 Connect pairing and session initiation) only builds on Unix (it uses
+# tokio::net::unix), so it sits behind the "connect" feature and a cfg(unix) target table; the
+# drivers that need it declare required-features. On Windows the tests build and run those
+# drivers inside WSL (see S2InteropTests/Harness/RustHarness.cs).
+
+[package]
+name = "s2-rust-harness"
+version = "0.1.0"
+edition = "2024"
+publish = false
+license = "AGPL-3.0-or-later"
+
+[features]
+default = []
+connect = ["dep:s2energy-connection"]
+
+[dependencies]
+s2energy-common     = { path = "../../libs/s2-rust/s2energy-common" }
+s2energy-messaging  = { path = "../../libs/s2-rust/s2energy-messaging" }
+
+axum-server        = { version = "0.8", features = ["tls-rustls"] }
+base64             = "0.22"
+chrono             = { version = "0.4", features = ["serde"] }
+clap               = { version = "4", features = ["derive"] }
+hex                = "0.4"
+hmac               = "0.12"
+rustls             = "0.23"
+serde              = { version = "1", features = ["derive"] }
+serde_json         = "1"
+sha2               = "0.10"
+tokio              = { version = "1", features = ["full"] }
+tracing            = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid               = { version = "1", features = ["v4", "serde"] }
+
+[target.'cfg(unix)'.dependencies]
+s2energy-connection = { path = "../../libs/s2-rust/s2energy-connection", optional = true }
+
+[[bin]]
+name = "s2-json-echo"
+path = "src/bin/s2-json-echo.rs"
+
+[[bin]]
+name = "s2-hmac"
+path = "src/bin/s2-hmac.rs"
+required-features = ["connect"]
+
+[[bin]]
+name = "s2-pairing-server"
+path = "src/bin/s2-pairing-server.rs"
+required-features = ["connect"]
+
+[[bin]]
+name = "s2-pairing-client"
+path = "src/bin/s2-pairing-client.rs"
+required-features = ["connect"]
+
+[[bin]]
+name = "s2-comm-server"
+path = "src/bin/s2-comm-server.rs"
+required-features = ["connect"]
+
+[[bin]]
+name = "s2-comm-client"
+path = "src/bin/s2-comm-client.rs"
+required-features = ["connect"]
+
+# mDNS discovery is not part of the interoperability tests; the real zeroconf-tokio needs
+# libclang and the Apple Bonjour SDK on Windows and the Avahi headers on Linux. The stub keeps
+# the API surface of the discovery module compiling and reports "not available" at run time.
+[patch.crates-io]
+zeroconf-tokio = { path = "stubs/zeroconf-tokio" }

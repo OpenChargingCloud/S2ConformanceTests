@@ -1,0 +1,19 @@
+# .NET
+S2InteropTests/bin/
+S2InteropTests/obj/
+artifacts/
+TestResults/
+*.trx
+*.user
+.vs/
+
+# Python (the s2-python virtual environment created by the interop harness)
+.venv-s2python/
+__pycache__/
+*.pyc
+
+# Rust (the s2-rust harness build output)
+tools/s2-rust-harness/target/
+
+# Scratch material of test runs
+*.log

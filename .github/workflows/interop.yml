@@ -1,0 +1,105 @@
+name: Interop
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Nightly (PLAN.md of WWCP_S2, D12 and §8: the Interop category is a nightly job).
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: interop-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+
+  # Linux runs everything: s2-python (venv from libs/s2-python) and s2-rust including the
+  # S2 Connect drivers (s2energy-connection only builds on Unix). A missing toolchain is a
+  # failure here (S2_INTEROP_REQUIRE), never a silent skip.
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/s2-rust-harness
+
+      - name: Build the s2-rust drivers
+        working-directory: tools/s2-rust-harness
+        run: cargo build --release --features connect
+
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      - name: Interop tests
+        env:
+          S2_INTEROP_REQUIRE: "1"
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=linux.trx" --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: interop-results-linux
+          path: artifacts/*.trx
+
+  # Windows runs the s2-python tests and the s2-rust message layer; the S2 Connect drivers
+  # need WSL there and are skipped on a hosted runner.
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tools/s2-rust-harness
+
+      - name: Build the s2-rust message-layer driver
+        working-directory: tools/s2-rust-harness
+        run: cargo build --release
+
+      - name: Build
+        run: dotnet build S2InteropTests/S2InteropTests.csproj --configuration Release
+
+      - name: Interop tests
+        env:
+          S2_INTEROP_SKIP_CARGO_BUILD: "1"
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop" --logger "console;verbosity=normal" --logger "trx;LogFileName=windows.trx" --results-directory artifacts
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: interop-results-windows
+          path: artifacts/*.trx

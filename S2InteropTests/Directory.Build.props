@@ -1,0 +1,27 @@
+<Project>
+
+  <!--
+    Shared build settings of the S2 interoperability tests. They mirror the settings of the
+    WWCP_S2 library (libs/WWCP_S2/Directory.Build.props): every warning is an error and the
+    recommended analyzers are on. The submodules below libs/ carry their own build props.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+
+    <Authors>GraphDefined GmbH</Authors>
+    <Company>GraphDefined GmbH</Company>
+    <Copyright>Copyright (c) 2014-2026 GraphDefined GmbH</Copyright>
+  </PropertyGroup>
+
+</Project>

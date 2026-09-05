@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/libs/">
+    <Project Path="libs/Styx/Styx/Styx.csproj" />
+    <Project Path="libs/Hermod/Hermod/Hermod.csproj" />
+    <Project Path="libs/WWCP_S2/WWCP_S2/WWCP_S2.csproj" />
+    <Project Path="libs/WWCP_S2/WWCP_S2Tests/WWCP_S2Tests.csproj" />
+  </Folder>
+  <Project Path="S2InteropTests/S2InteropTests.csproj" />
+</Solution>
