@@ -200,6 +200,30 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         #endregion
 
 
+        #region WaitForSentAsync(MessageType, Timeout = null)
+
+        /// <summary>
+        /// The first recorded message of the given type sent by this side, waiting for it when
+        /// it has not been recorded yet: the peer can receive and report a message before the
+        /// session raised OnMessageSent on this side, so a test that waited for the peer's
+        /// report must not assume the record exists already.
+        /// </summary>
+        /// <param name="MessageType">The S2 message type, e.g. "FRBC.SystemDescription".</param>
+        /// <param name="Timeout">An optional timeout (default: 15 seconds).</param>
+        public async Task<Entry> WaitForSentAsync(String     MessageType,
+                                                  TimeSpan?  Timeout   = null)
+        {
+
+            await Interop.WaitUntilAsync(() => Sent.Any(entry => entry.MessageType == MessageType),
+                                         Timeout:      Timeout,
+                                         Description:  $"the recorded '{MessageType}' sent by WWCP S2");
+
+            return Sent.First(entry => entry.MessageType == MessageType);
+
+        }
+
+        #endregion
+
         #region Count(Direction, MessageType)
 
         /// <summary>

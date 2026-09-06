@@ -207,7 +207,9 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
             var systemDescription = await f.CEM.WaitForEventAsync("system_description");
             Assert.That(systemDescription["operation_mode_ids"]!.Values<String>().Count(), Is.EqualTo(2));
 
-            var sentDescription = f.Recorder.Sent.Single(entry => entry.MessageType == "FRBC.SystemDescription");
+            // Waited for, not looked up: s2-python can report the description before the RM's
+            // session has raised OnMessageSent (a race the nightly on Windows lost once).
+            var sentDescription = await f.Recorder.WaitForSentAsync("FRBC.SystemDescription");
             await Interop.WaitUntilAsync(() => f.Recorder.ReceivedReceptionStatuses(Message_Id.Parse(sentDescription.JSON.Value<String>("message_id")!)).Any(),
                                          Description: "the ReceptionStatus for the system description");
             Assert.That(f.Recorder.ReceivedReceptionStatuses(Message_Id.Parse(sentDescription.JSON.Value<String>("message_id")!)).Single().Value<String>("status"), Is.EqualTo("OK"));
