@@ -84,7 +84,11 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Specification
             foreach (var file in Directory.GetFiles(StructuredDocumentation, "*.toml").Order(StringComparer.Ordinal))
             {
 
-                var model  = Toml.ToModel(File.ReadAllText(file), file);
+                // Tomlyn 2.x replaced Toml.ToModel(text, sourceName) by the System.Text.Json-style
+                // serializer; the source name of the old overload is now an option.
+                var model  = TomlSerializer.Deserialize<TomlTable>(File.ReadAllText(file),
+                                                                   new TomlSerializerOptions { SourceName = file })
+                                 ?? throw new InvalidOperationException($"The structured documentation file '{file}' does not contain a TOML table!");
                 var name   = model["type_name"] as String ?? Path.GetFileNameWithoutExtension(file);
 
                 if (model.TryGetValue("variants", out var variantsValue) && variantsValue is TomlTable variants)

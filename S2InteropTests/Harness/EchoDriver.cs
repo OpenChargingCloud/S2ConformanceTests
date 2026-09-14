@@ -153,8 +153,8 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
 
             if (!validation.IsValid)
             {
-                var errors = validation.Details.
-                                 Where (detail => detail.HasErrors).
+                var errors = (validation.Details ?? [validation]).
+                                 Where (detail => detail.Errors is not null && detail.Errors.Count > 0).
                                  Select(detail => $"{detail.InstanceLocation}: {String.Join("; ", detail.Errors!.Select(error => error.Key + " " + error.Value))}");
                 return new RoundTripResult(false, $"the {Name} re-serialisation of {Message.MessageType} violates its schema: {String.Join(" | ", errors)}{Environment.NewLine}{echoed.ToString(Formatting.Indented)}");
             }

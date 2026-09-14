@@ -185,8 +185,8 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                 if (!results.IsValid)
                 {
 
-                    var errors = results.Details.
-                                     Where (detail => detail.HasErrors).
+                    var errors = (results.Details ?? [results]).
+                                     Where (detail => detail.Errors is not null && detail.Errors.Count > 0).
                                      Select(detail => $"{detail.InstanceLocation}: {String.Join("; ", detail.Errors!.Select(error => error.Key + " " + error.Value))}");
 
                     violations.Add($"{Direction} {messageType} violates its schema: {String.Join(" | ", errors)}{Environment.NewLine}{JSON.ToString(Formatting.None)}");
