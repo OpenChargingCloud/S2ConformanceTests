@@ -373,3 +373,115 @@ jobs:
         with:
           name: drift-results-specification
           path: artifacts/*.trx
+
+
+  report:
+    name: Carry a red run into an issue
+    needs: [ dotnet-stack, reference-implementations, specification ]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    # The three jobs above answer three different questions, and a red answer to any of them
+    # is work for somebody here: a pin bump to queue, an Interop.KnownIssue marker to remove
+    # because upstream fixed the finding it pins, an embedded schema to refresh. None of that
+    # reaches anybody through a red run alone. Runs scroll out of the Actions list, a red
+    # badge says which workflow but not what, and a run nobody has read can be deleted before
+    # anybody does - which is exactly what happened to the red run of 2026-09-14.
+    #
+    # So one issue carries the state, and this job is the only thing that writes it:
+    #
+    #   red, no open issue     -> open one, labelled "upstream drift", naming the failing legs
+    #   red, issue already open -> rewrite the body in place (latest run, date, legs) and say
+    #                             nothing, UNLESS the set of failing legs changed: that is new
+    #                             information and earns a comment, and with it a notification
+    #   green, issue open      -> name the run that cleared it and close the issue
+    #   green, no open issue   -> nothing at all
+    #
+    # The silent update is the point. A nightly comment repeating yesterday's finding teaches
+    # people to mute the issue, and a muted drift report is worth no more than an unread run.
+
+    steps:
+
+      - name: Open, update or close the drift issue
+        shell: bash
+        env:
+          GH_TOKEN:   ${{ github.token }}
+          GH_REPO:    ${{ github.repository }}
+          DOTNET:     ${{ needs['dotnet-stack'].result }}
+          REFERENCE:  ${{ needs['reference-implementations'].result }}
+          SPEC:       ${{ needs.specification.result }}
+          RUN_URL:    ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          LABEL="upstream drift"
+          TITLE="Upstream drift is red"
+
+          # "failure" is a red leg; "cancelled" and "skipped" are not findings, and the job
+          # does not run at all when the whole workflow was cancelled (see the if: above).
+          legs=""
+          read_of=""
+          if [ "$DOTNET" = "failure" ]; then
+            legs="$legs dotnet-stack"
+            read_of="$read_of- \`Against upstream WWCP_S2/Hermod/Styx\`: WWCP S2, Hermod or Styx moved and the suite does not survive it yet. Queue it before the next pin bump.\n"
+          fi
+          if [ "$REFERENCE" = "failure" ]; then
+            legs="$legs reference-implementations"
+            read_of="$read_of- \`Against upstream s2-python/s2-rust/s2auth\`: a reference implementation changed. Either it broke something the suite relies on, or it FIXED a finding in FINDINGS.md - the failure names the \`Interop.KnownIssue\` marker to remove.\n"
+          fi
+          if [ "$SPEC" = "failure" ]; then
+            legs="$legs specification"
+            read_of="$read_of- \`Against upstream s2-json/s2-connect/s2-documentation\`: the schemas, the OpenAPI files or the structured documentation moved. WWCP S2's embedded copy is behind the standard, or documentation and schemas disagree in a new way.\n"
+          fi
+          legs="${legs# }"
+
+          issue=$(gh issue list --label "$LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ -z "$legs" ]; then
+            if [ -n "$issue" ]; then
+              gh issue comment "$issue" --body "Green again: [this run]($RUN_URL) moved the submodules to their upstream default branches and the whole suite survived it. Closing; the workflow reopens a new issue the next time a leg goes red."
+              gh issue close "$issue"
+              echo "Closed #$issue: the drift is green again."
+            else
+              echo "Green, and no open drift issue. Nothing to report."
+            fi
+            exit 0
+          fi
+
+          # The marker is how the next red run knows whether the finding actually changed.
+          {
+            echo "The upstream drift run is red. It moves the submodules to their upstream default"
+            echo "branches *before* running the suite, so this is about what changed upstream, not"
+            echo "about code that was written here - \`ci.yml\` and \`nightly.yml\` keep testing the pins."
+            echo
+            echo "**What is red, and how to read it**"
+            echo
+            printf '%b' "$read_of"
+            echo
+            echo "Latest red run: $RUN_URL ($(date -u '+%Y-%m-%d'))"
+            echo
+            echo "While the drift stays red this body is rewritten in place, without a comment, so"
+            echo "that only a *change* in the finding notifies anybody. The workflow closes this"
+            echo "issue as soon as a drift run is green again."
+            echo
+            echo "<!-- upstream-drift-legs: $legs -->"
+          } > issue-body.md
+
+          if [ -z "$issue" ]; then
+            gh label create "$LABEL" --color B60205 --description "A red upstream drift run: the submodules moved and something here does not survive it" --force
+            number=$(gh issue create --title "$TITLE" --label "$LABEL" --body-file issue-body.md | sed 's#.*/##')
+            echo "Opened #$number for: $legs"
+            exit 0
+          fi
+
+          previous=$(gh issue view "$issue" --json body --jq '.body' | sed -n 's/.*<!-- upstream-drift-legs: \(.*\) -->.*/\1/p')
+          gh issue edit "$issue" --body-file issue-body.md
+
+          if [ "$previous" = "$legs" ]; then
+            echo "Updated #$issue in place, still: $legs"
+          else
+            gh issue comment "$issue" --body "The failing legs changed: \`${previous:-none}\` -> \`$legs\`. See [this run]($RUN_URL); the issue body has the current reading."
+            echo "Updated #$issue and commented: $previous -> $legs"
+          fi
