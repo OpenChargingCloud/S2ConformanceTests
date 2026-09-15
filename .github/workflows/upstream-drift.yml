@@ -437,7 +437,18 @@ jobs:
           fi
           legs="${legs# }"
 
-          issue=$(gh issue list --label "$LABEL" --state open --limit 1 --json number --jq '.[0].number // empty')
+          # There should only ever be one, but "should" is not a guarantee: somebody can put
+          # the label on an issue by hand, and a run that died between "issue create" and the
+          # next night leaves a second one behind. gh lists newest first, so sort and take the
+          # OLDEST - that is the one this job opened - and only mention the rest. Closing them
+          # would be worse: an issue somebody else opened under this label is theirs, not ours.
+          open_issues=$(gh issue list --label "$LABEL" --state open --limit 100 --json number --jq 'sort_by(.number) | map(.number) | join(" ")')
+          issue="${open_issues%% *}"
+          others="${open_issues#"$issue"}"
+          others="${others# }"
+          if [ -n "$others" ]; then
+            echo "::warning::More than one open issue carries the \"$LABEL\" label. Maintaining the oldest, #$issue; also open: $others"
+          fi
 
           if [ -z "$legs" ]; then
             if [ -n "$issue" ]; then
@@ -466,6 +477,11 @@ jobs:
             echo "that only a *change* in the finding notifies anybody. The workflow closes this"
             echo "issue as soon as a drift run is green again."
             echo
+            if [ -n "$others" ]; then
+              echo "More than one open issue carries the \`$LABEL\` label. This job maintains the"
+              echo "oldest one, which is this one, and leaves the others alone: $others"
+              echo
+            fi
             echo "<!-- upstream-drift-legs: $legs -->"
           } > issue-body.md
 
