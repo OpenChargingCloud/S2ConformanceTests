@@ -35,12 +35,16 @@ dotnet build S2InteropTests/S2InteropTests.csproj
 dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|TestCategory=Specification"
 ```
 
-Expected (2026-09-06): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
-Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.9–3.13, Rust. On Windows the S2
-Connect drivers of s2-rust build and run inside WSL (Debian with rustup;
-`s2energy-connection` is Unix-only), and the "s2-rust client → WWCP server" tests
-additionally need the Windows firewall to admit the test host from the WSL network. Fixtures
-skip with a reason when a toolchain is missing; `S2_INTEROP_REQUIRE=1` (what the CI sets)
+Expected (2026-09-15): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
+Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.9–3.13, Rust via rustup. On
+Windows that means two installations, and both are needed for the full suite: a native one
+for the message-layer drivers (`rustup-init.exe`, plus the MSVC build tools for the linker),
+and one inside WSL for the S2 Connect drivers (Debian with rustup; `s2energy-connection` is
+Unix-only). Only `$HOME/.cargo/bin/cargo` counts inside WSL — a distribution's own cargo
+package is not looked for, and Debian 13's is too old for the harness lock file anyway, which
+wants at least Rust 1.88. The "s2-rust client → WWCP server" tests additionally need the
+Windows firewall to admit the test host from the WSL network. Fixtures skip with a reason
+when a toolchain is missing; `S2_INTEROP_REQUIRE=1` (what the CI sets)
 makes that a failure. All `S2_INTEROP_*` variables are listed in README.md.
 
 ## Ground rules

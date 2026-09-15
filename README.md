@@ -93,7 +93,10 @@ dotnet test S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|
 
 The interoperability tests start the reference implementations as external peers and
 therefore need, besides the .NET 10 SDK, a Python 3.9–3.13 interpreter (s2-python, s2auth)
-and a Rust toolchain (`cargo`, s2-rust). The first run creates `.venv-s2python/` from
+and a Rust toolchain installed with [rustup](https://rustup.rs) (s2-rust). The tests look for
+`cargo` on the PATH, in `~/.cargo/bin` or in `S2_INTEROP_CARGO`, and the lock file of
+`tools/s2-rust-harness` wants at least Rust 1.88, so a distribution's own cargo package may
+be both invisible and too old. The first run creates `.venv-s2python/` from
 `libs/s2-python` and `.venv-s2auth/` from `libs/s2auth`, and builds `tools/s2-rust-harness`.
 Fixtures whose toolchain is missing are skipped with a message; set `S2_INTEROP_REQUIRE=1`
 (as the CI does) to turn that into a failure. The specification tests need nothing but the
@@ -101,9 +104,15 @@ checked-out submodules.
 
 ### On Windows
 
-The S2 Connect crate of s2-rust (`s2energy-connection`) only builds on Unix, so on Windows the
-S2 Connect drivers are built and run inside a WSL distribution with Rust installed
+Windows needs Rust twice, and the full suite needs both: the native toolchain
+(`rustup-init.exe` from [rustup.rs](https://rustup.rs), plus the MSVC build tools, which
+supply the linker) builds the message-layer drivers, and a second one inside WSL builds the
+rest. The S2 Connect crate of s2-rust (`s2energy-connection`) only builds on Unix, so on
+Windows those drivers are built and run inside a WSL distribution with Rust installed
 (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal`).
+That command is the one that matters: the harness tests for `$HOME/.cargo/bin/cargo` in the
+distribution and does not look anywhere else, so an `apt install cargo` stays invisible to
+it.
 For the "s2-rust client → WWCP server" tests WSL reaches the test host through the WSL
 virtual network (the Windows firewall must admit the test host there) and the harness maps
 the host name `wwcp-cem.local` to the Windows address in the distribution's `/etc/hosts` (as
