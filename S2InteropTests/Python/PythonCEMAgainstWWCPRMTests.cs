@@ -257,7 +257,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
             await using var f = await RMFixture.StartAsync();
 
             var client     = f.CreateClient(Token: "not-the-token");
-            var exception  = Assert.ThrowsAsync<S2WebSocketConnectException>(async () => await client.ConnectSessionAsync());
+            var exception  = await Assert.ThrowsAsync<S2WebSocketConnectException>(async () => await client.ConnectSessionAsync());
 
             Assert.That(exception!.Response.HTTPStatusCode, Is.EqualTo(HTTPStatusCode.Unauthorized));
 
