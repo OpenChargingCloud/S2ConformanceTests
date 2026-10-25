@@ -103,7 +103,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                 throw new ToolchainMissingException($"The s2auth submodule is not checked out at '{RepositoryPaths.S2Auth}': run 'git submodule update --init libs/s2auth'.");
 
             var basePython = await Toolchains.FindBasePythonAsync()
-                                 ?? throw new ToolchainMissingException("No Python 3.10 to 3.13 interpreter was found for s2auth. " +
+                                 ?? throw new ToolchainMissingException("No Python 3.11 to 3.14 interpreter was found for s2auth (the range s2-python 0.11 shares). " +
                                                                         "Install one, or point S2_INTEROP_BASE_PYTHON at it, or S2_INTEROP_S2AUTH_PYTHON at an interpreter with s2auth[client,server].");
 
             TestContext.Progress.WriteLine($"[s2auth] creating the venv '{RepositoryPaths.S2AuthVenv}' from '{basePython}' …");

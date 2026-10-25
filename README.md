@@ -42,10 +42,10 @@ gets exactly one `ReceptionStatus`.
 |-----------|---------|
 | [`libs/WWCP_S2`](https://github.com/OpenChargingCloud/WWCP_S2) | **The stack under test**: S2 JSON messages, S2 Connect pairing, session initiation and the WebSocket transport in C#. Its `WWCP_S2Tests` project provides the schema validator and the `[S2C]` traceability attribute, and runs in the CI here as well. |
 | [`libs/Styx`](https://github.com/Vanaheimr/Styx), [`libs/Hermod`](https://github.com/Vanaheimr/Hermod) | Foundations of the stack: helpers, networking (HTTP, WebSockets, TLS, PKI). WWCP S2 references them as sibling directories, which is why they have to be checked out. |
-| [`libs/s2-python`](https://github.com/flexiblepower/s2-python) | Reference implementation #1 (v0.10.0): pydantic models and `S2AsyncConnection` over WebSockets in plain mode with the `Handshake` exchange. Installed into a virtual environment by the tests. |
+| [`libs/s2-python`](https://github.com/flexiblepower/s2-python) | Reference implementation #1 (v0.11.1): pydantic models and `S2AsyncConnection` over WebSockets in plain mode with the `Handshake` exchange. Installed into a virtual environment by the tests. |
 | [`libs/s2-rust`](https://github.com/flexiblepower/s2-rust) | Reference implementation #2: the message layer (`s2energy-messaging`, generated from its own JSON schema) and S2 Connect pairing, session initiation and communication (`s2energy-connection`). Wrapped by the driver binaries. |
 | [`libs/s2auth`](https://github.com/flexiblepower/s2auth) | Reference implementation #3 (v0.1.0): S2 Connect pairing and session initiation in Python (client library, FastAPI reference server), the HTTP part only. Installed into its own virtual environment by the tests. |
-| [`libs/s2-json`](https://github.com/flexiblepower/s2-json) | **The normative S2 JSON schemas** (tag v1.0.0): 36 message and 41 type schemas. WWCP S2 embeds a copy; the drift tests compare the two. |
+| [`libs/s2-json`](https://github.com/flexiblepower/s2-json) | **The normative S2 JSON schemas** (v1.0.0 plus the erratum of s2-json#32, commit `02772ed`, which only corrects two descriptions in `ControlType.schema.json`): 36 message and 41 type schemas. WWCP S2 embeds a copy; the drift tests compare the two. |
 | [`libs/s2-connect`](https://github.com/flexiblepower/s2-connect) | **The normative S2 Connect OpenAPI files** (tag v1.0): pairing, session initiation, common types, WAN endpoint registry. WWCP S2 embeds a copy; the drift tests compare the two. |
 | [`libs/s2-documentation`](https://github.com/flexiblepower/s2-documentation) | The S2 documentation website and its `structured-documentation/` (one TOML file per message, object and enumeration, the source of the data model reference), held against the schemas and WWCP S2's types. |
 
@@ -74,10 +74,10 @@ value is accepted by the WWCP S2 type of that name.
 
 ## Findings
 
-[FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0, s2-rust, s2auth
+[FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and 0.11.1, s2-rust, s2auth
 0.1.0, the S2 documentation and Hermod, with the test that reproduces each finding, the place
-upstream and the consequence for WWCP S2. State on 2026-09-06 (Windows and Linux): 128
-tests, 108 passed, 20 known issues, 0 failed. Known issues are pinned in their tests with
+upstream and the consequence for WWCP S2. State on 2026-10-25: 128 tests, 108 passed,
+20 known issues, 0 failed. Known issues are pinned in their tests with
 `Interop.KnownIssue(...)`: they end with a warning while the issue exists and fail once the
 upstream behaviour changes, so that the marker gets removed and the fix recorded.
 
@@ -92,7 +92,7 @@ dotnet test S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|
 ```
 
 The interoperability tests start the reference implementations as external peers and
-therefore need, besides the .NET 10 SDK, a Python 3.9–3.13 interpreter (s2-python, s2auth)
+therefore need, besides the .NET 10 SDK, a Python 3.11–3.14 interpreter (s2-python, s2auth)
 and a Rust toolchain installed with [rustup](https://rustup.rs) (s2-rust). The tests look for
 `cargo` on the PATH, in `~/.cargo/bin` or in `S2_INTEROP_CARGO`, and the lock file of
 `tools/s2-rust-harness` wants at least Rust 1.88, so a distribution's own cargo package may

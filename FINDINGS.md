@@ -7,11 +7,13 @@ issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-09-06: WWCP S2 `cc6f59b`, Hermod `3d92759`, s2-python v0.10.0 (`ea46bde`),
-s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0, s2-json v1.0.0 (`d58b2f0`),
-s2-connect v1.0 (`d434762`), s2-documentation `0ba4f5c`. 128 tests: 108 passed, 20 known
-issues, 0 failed — on Windows 11 with the S2 Connect drivers of s2-rust inside WSL, and on
-Linux (Debian 13 in WSL, everything native) since Hermod `3d92759` (H1, H2 below).
+State on 2026-10-25: WWCP S2 `3c8f608`, Hermod `f99c56b`, Styx `06b592d`, s2-python
+v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0, s2-json
+`02772ed` (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
+(`d434762`), s2-documentation `316907e`. 128 tests: 108 passed, 20 known issues, 0 failed —
+on Windows 11 with the S2 Connect drivers of s2-rust inside WSL. Every s2-python finding
+below was found in 0.10.0 and is still present in 0.11.1. Linux (Debian 13, everything
+native) has passed since Hermod `3d92759` (H1, H2 below) and is gated by ci.yml.
 
 ## The specification texts the tests hold the implementations to
 
@@ -47,7 +49,7 @@ Linux (Debian 13 in WSL, everything native) since Hermod `3d92759` (H1, H2 below
 WWCP S2 follows both; the deviations below are on the side of the reference implementations,
 except where marked as a consequence for WWCP S2.
 
-## s2-python 0.10.0
+## s2-python 0.10.0 and 0.11.1
 
 ### Known issues
 

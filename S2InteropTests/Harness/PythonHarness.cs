@@ -77,7 +77,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                 return python;
 
             var basePython = await Toolchains.FindBasePythonAsync()
-                                 ?? throw new ToolchainMissingException("No Python 3.9 to 3.13 interpreter was found (s2-python 0.10 does not support 3.14 yet). " +
+                                 ?? throw new ToolchainMissingException("No Python 3.11 to 3.14 interpreter was found (s2-python 0.11 requires at least 3.11). " +
                                                                         "Install one, or point S2_INTEROP_BASE_PYTHON at it, or S2_INTEROP_PYTHON at an interpreter with s2-python[ws].");
 
             TestContext.Progress.WriteLine($"[python] creating the venv '{RepositoryPaths.PythonVenv}' from '{basePython}' …");

@@ -37,7 +37,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
     /// location can be overridden with an environment variable:
     /// <list type="bullet">
     ///   <item>S2_INTEROP_PYTHON: the Python interpreter with s2-python installed (skips the venv).</item>
-    ///   <item>S2_INTEROP_BASE_PYTHON: the interpreter the venv is created from (3.9 to 3.13).</item>
+    ///   <item>S2_INTEROP_BASE_PYTHON: the interpreter the venvs are created from (3.11 to 3.14).</item>
     ///   <item>S2_INTEROP_VENV: the venv directory (default: &lt;repo&gt;/.venv-s2python).</item>
     ///   <item>S2_INTEROP_CARGO: the cargo executable.</item>
     ///   <item>S2_INTEROP_REQUIRE: "1" makes a missing toolchain a test failure instead of a skip.</item>
@@ -68,15 +68,16 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         #region FindBasePythonAsync()
 
         /// <summary>
-        /// Find an interpreter the s2-python venv can be created from: s2-python 0.10 requires
-        /// Python 3.9 to 3.13. Tries S2_INTEROP_BASE_PYTHON, the Windows launcher "py -3.13" …
-        /// "py -3.9", and "python3.13" … "python3.9", "python3", "python" on the PATH.
+        /// Find an interpreter the s2-python and s2auth venvs can be created from: s2-python 0.11
+        /// requires Python 3.11 to 3.15, s2auth 0.1 3.10 to 3.14, so 3.11 to 3.14 serves both.
+        /// Tries S2_INTEROP_BASE_PYTHON, the Windows launcher "py -3.14" …
+        /// "py -3.11", and "python3.14" … "python3.11", "python3", "python" on the PATH.
         /// </summary>
         public static async Task<String?> FindBasePythonAsync()
         {
 
             var candidates  = new List<String[]>();
-            var versions    = new[] { "3.13", "3.12", "3.11", "3.10", "3.9" };
+            var versions    = new[] { "3.14", "3.13", "3.12", "3.11" };
 
             if (Environment.GetEnvironmentVariable("S2_INTEROP_BASE_PYTHON") is { Length: > 0 } configured)
                 candidates.Add([ configured ]);
@@ -119,7 +120,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                     if (parts.Length == 2 &&
                         Int32.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var major) &&
                         Int32.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var minor) &&
-                        major == 3 && minor >= 9 && minor <= 13)
+                        major == 3 && minor >= 11 && minor <= 14)
                     {
                         return lines[0];
                     }

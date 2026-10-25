@@ -229,7 +229,7 @@ jobs:
       # Only the reference implementations move here — the .NET side stays pinned on
       # purpose, so that a red run in this job means "s2-python, s2-rust or s2auth changed"
       # and nothing else. Note what the pins are: s2-python and s2auth sit on release tags
-      # (v0.10.0, v0.1.0), s2-rust on a commit of main, and all three default branches are
+      # (v0.11.1, v0.1.0), s2-rust on a commit of main, and all three default branches are
       # "main" — read from the remote rather than hardcoded, as in the job above.
       - name: Move the reference implementations to their upstream default branch
         shell: bash
@@ -323,9 +323,10 @@ jobs:
         with:
           submodules: recursive
 
-      # s2-json and s2-connect sit on release tags (v1.0.0, v1.0), s2-documentation on a
-      # commit of main. A red here after s2-json or s2-connect moved says the standard
-      # changed and WWCP S2's embedded copy (and its THIRD-PARTY-NOTICES.md) has to follow;
+      # s2-connect sits on a release tag (v1.0), s2-json on the commit of main that adds an
+      # erratum to v1.0.0 (s2-json#32), s2-documentation on a commit of main. A red here
+      # after s2-json or s2-connect moved says the standard changed and WWCP S2's embedded
+      # copy (and its THIRD-PARTY-NOTICES.md) has to follow;
       # a red after s2-documentation moved says the documentation and the schemas disagree
       # in a new way (the known ones are D1 to D4 in FINDINGS.md), or that WWCP S2 lacks a
       # newly documented enumeration value.

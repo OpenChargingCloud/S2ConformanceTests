@@ -35,8 +35,8 @@ dotnet build S2InteropTests/S2InteropTests.csproj
 dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|TestCategory=Specification"
 ```
 
-Expected (2026-09-15): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
-Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.9–3.13, Rust via rustup. On
+Expected (2026-10-25): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
+Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.11–3.14, Rust via rustup. On
 Windows that means two installations, and both are needed for the full suite: a native one
 for the message-layer drivers (`rustup-init.exe`, plus the MSVC build tools for the linker),
 and one inside WSL for the S2 Connect drivers (Debian with rustup; `s2energy-connection` is

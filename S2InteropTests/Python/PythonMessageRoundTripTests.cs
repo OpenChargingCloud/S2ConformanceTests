@@ -66,7 +66,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Python
         #region EveryMessage_SurvivesARoundTripThroughS2Python(Message)
 
         /// <summary>
-        /// Messages s2-python 0.10.0 cannot process, with the reason.
+        /// Messages s2-python 0.11.1 cannot process, with the reason.
         /// </summary>
         private static readonly Dictionary<String, String> knownIssues = new (StringComparer.Ordinal) {
 

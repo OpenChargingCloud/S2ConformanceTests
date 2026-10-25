@@ -34,10 +34,11 @@ jobs:
     #  * Debian 13, because that is what the stack runs on in production. GitHub offers no
     #    Debian runner image, so this leg runs on an Ubuntu runner inside a debian:13
     #    container. Deliberately NOT the official .NET SDK image: that is still
-    #    Debian-12-based, and Debian 13 is also what ships Python 3.13 — the newest Python
-    #    s2-python 0.10.0 accepts. This is the only leg that can build s2-rust's S2 Connect
-    #    crate (s2energy-connection is Unix-only), so it runs everything, and a missing
-    #    toolchain is a failure here (S2_INTEROP_REQUIRE), never a silent skip.
+    #    Debian-12-based, and Debian 13 ships Python 3.13, inside the 3.11 to 3.14 that
+    #    s2-python 0.11 and s2auth both accept. This is the only leg that can build
+    #    s2-rust's S2 Connect crate (s2energy-connection is Unix-only), so it runs
+    #    everything, and a missing toolchain is a failure here (S2_INTEROP_REQUIRE), never
+    #    a silent skip.
     #  * Windows, because that is where WWCP S2 is developed, and TLS goes through
     #    Schannel/CryptoAPI instead of OpenSSL. The S2 Connect drivers would need WSL
     #    there, which a hosted runner does not have, so those fixtures skip with a reason
