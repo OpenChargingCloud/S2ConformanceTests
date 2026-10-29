@@ -47,6 +47,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests
         public const String S2Auth   = "s2auth";
 
         /// <summary>
+        /// Tests against the S2 CEM library of the ElaadNL Residential Flexibility initiative
+        /// (libs/resflex-open-s2-hems-connector).
+        /// </summary>
+        public const String Resflex  = "resflex";
+
+        /// <summary>
         /// Tests holding WWCP S2 to the pinned specification material (libs/s2-json,
         /// libs/s2-connect, libs/s2-documentation); no external toolchain needed.
         /// </summary>

@@ -59,6 +59,13 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Path.Combine(Libs, "s2auth");
 
         /// <summary>
+        /// libs/resflex-open-s2-hems-connector: the S2 CEM library of the ElaadNL Residential
+        /// Flexibility initiative (s2_cem_lib).
+        /// </summary>
+        public static String  Resflex
+            => Path.Combine(Libs, "resflex-open-s2-hems-connector");
+
+        /// <summary>
         /// libs/s2-json: the normative S2 JSON schemas.
         /// </summary>
         public static String  S2Json
@@ -101,6 +108,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Path.Combine(Root.FullName, "tools", "s2auth-harness");
 
         /// <summary>
+        /// tools/resflex-harness: the drivers of the ElaadNL S2 CEM library.
+        /// </summary>
+        public static String  ResflexHarness
+            => Path.Combine(Root.FullName, "tools", "resflex-harness");
+
+        /// <summary>
         /// The Python virtual environment with s2-python installed; overridable
         /// with the environment variable S2_INTEROP_VENV.
         /// </summary>
@@ -116,6 +129,15 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
             => Environment.GetEnvironmentVariable("S2_INTEROP_S2AUTH_VENV") is { Length: > 0 } venv
                    ? venv
                    : Path.Combine(Root.FullName, ".venv-s2auth");
+
+        /// <summary>
+        /// The virtual environment the ElaadNL S2 CEM library runs in (S2_INTEROP_RESFLEX_VENV,
+        /// default .venv-resflex).
+        /// </summary>
+        public static String  ResflexVenv
+            => Environment.GetEnvironmentVariable("S2_INTEROP_RESFLEX_VENV") is { Length: > 0 } venv
+                   ? venv
+                   : Path.Combine(Root.FullName, ".venv-resflex");
 
 
         private static DirectoryInfo FindRoot()

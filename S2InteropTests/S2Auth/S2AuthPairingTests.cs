@@ -120,6 +120,18 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
                              ToList();
 
         /// <summary>
+        /// The HTTP requests the s2auth server handled, once the report of the last request the
+        /// test made (the path ending with LastPath) has arrived: the HTTP response can overtake
+        /// the server's report of it (see ExternalProcess.SawEventAsync).
+        /// </summary>
+        internal static async Task<IReadOnlyList<(String Path, Int32 Status)>> ServerTrailAsync(ExternalProcess  Server,
+                                                                                                String           LastPath)
+        {
+            await Server.SawEventAsync(e => e.Value<String>("event") == "http" && e.Value<String>("path")?.EndsWith(LastPath, StringComparison.Ordinal) == true);
+            return ServerTrail(Server);
+        }
+
+        /// <summary>
         /// A WWCP S2 endpoint hosting one RM node, with an empty store.
         /// </summary>
         internal static (LocalEndpoint Endpoint, HostedNode Node, InMemoryS2Store Store) WWCPResourceManager(Deployment Deployment)
@@ -295,7 +307,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
             Assert.That(result.IsSuccess, Is.True, () => $"{result}{Environment.NewLine}{server.Diagnostics}");
 
             var requested = server.Events.FirstOrDefault(e => e.Value<String>("event") == "pairing_requested");
-            var trail     = ServerTrail(server);
+            var trail     = await ServerTrailAsync(server, "/finalizePairing");
 
             Assert.Multiple(() => {
                 Assert.That(requested?.Value<String>("client_node_id"),          Is.EqualTo(node.Id.ToString()),                     "the s2auth server saw the WWCP S2 node");
@@ -334,10 +346,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
             Assert.That(result.IsSuccess, Is.True, () => $"{result}{Environment.NewLine}{server.Diagnostics}");
 
+            var trail = await ServerTrailAsync(server, "/finalizePairing");
+
             Assert.Multiple(() => {
                 Assert.That(result.Pairing!.RemoteNodeId,           Is.EqualTo(serverNodeId));
                 Assert.That(result.Pairing.LocalCommunicationRole,  Is.EqualTo(CommunicationRole.CommunicationClient));
-                Assert.That(ServerTrail(server),                    Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/finalizePairing", 204)));
+                Assert.That(trail,                                  Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/finalizePairing", 204)));
             });
 
         }
@@ -370,10 +384,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
             var result = await client.PairAsync(node, PairingToken.Parse("WRONG1234"), PairingTarget.ByAlias(NodeIdAlias.Parse(ServerAlias)));
 
+            var trail = await ServerTrailAsync(server, "/finalizePairing");
+
             Assert.Multiple(() => {
                 Assert.That(result.IsSuccess,      Is.False,   () => result.ToString());
-                Assert.That(ServerTrail(server),   Has.None.Matches<(String Path, Int32 Status)>(entry => entry.Path.EndsWith("/requestConnectionDetails")), "the connection details were never requested");
-                Assert.That(ServerTrail(server),   Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/finalizePairing", 204)),                                       "the failure was reported with finalizePairing");
+                Assert.That(trail,                 Has.None.Matches<(String Path, Int32 Status)>(entry => entry.Path.EndsWith("/requestConnectionDetails")), "the connection details were never requested");
+                Assert.That(trail,                 Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/finalizePairing", 204)),                                       "the failure was reported with finalizePairing");
             });
 
         }

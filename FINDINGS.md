@@ -1,16 +1,18 @@
 # Findings
 
-What the tests of WWCP S2 against s2-python, s2-rust and s2auth, against the S2 documentation
-and — on Linux — against its own foundation Hermod found, with the test that reproduces each
+What the tests of WWCP S2 against s2-python, s2-rust and s2auth, against the S2 CEM library
+of the ElaadNL Residential Flexibility initiative, against the S2 documentation and — on
+Linux — against its own foundation Hermod found, with the test that reproduces each
 finding, the place upstream and the consequence for WWCP S2. Every finding of the "Known
 issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends with a warning
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-10-29: WWCP S2 `d2d6e8a`, Hermod `14c9701`, Styx `f494c8c`, s2-python
-v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0, s2-json
-`02772ed` (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
-(`d434762`), s2-documentation `316907e`. 128 tests: 108 passed, 20 known issues, 0 failed —
+State on 2026-10-29: WWCP S2 `1ad982f`, Hermod `14c9701`, Styx `f494c8c`, s2-python
+v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0,
+resflex-open-s2-hems-connector `c12c857` (the initial public release), s2-json `02772ed`
+(v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
+(`d434762`), s2-documentation `316907e`. 133 tests: 111 passed, 22 known issues, 0 failed —
 on Windows 11 with the S2 Connect drivers of s2-rust inside WSL. Every s2-python finding
 below was found in 0.10.0 and is still present in 0.11.1. Linux (Debian 13, everything
 native) has passed since Hermod `3d92759` (H1, H2 below) and is gated by ci.yml.
@@ -213,6 +215,71 @@ the WWCP S2 clients against its reference server.
 * `initiateSession` at the pairing API of the reference server accepts WWCP S2's bearer
   token and answers with a rotated token and the negotiated version (the step before A4).
 
+## The ElaadNL CEM library (resflex-open-s2-hems-connector, `c12c857`)
+
+`s2_cem_lib`, the CEM of the open reference implementation of the ElaadNL Residential
+Flexibility initiative: S2 Connect pairing, session initiation and long polling of its own on
+aiohttp, the S2 messages from s2-python, PEBC as its only control type. Tested through
+`tools/resflex-harness/resflex_cem.py`, which wires the library's `S2CemApp` the way its
+standalone engine (`cem_engine/run.py`) does, with the WWCP S2 `PairingClient` and
+`SessionInitiationClient` as the RM (`ResflexCEMTests`).
+
+### Known issues
+
+| # | Finding | Test | Where in resflex-open-s2-hems-connector |
+|---|---|---|---|
+| E1 | A failed pairing attempt leaves the RM paired. `requestPairing` stores the client as a paired node with an access token (and persists it) before either challenge has been answered, and `finalizePairing` ignores `success: false`. S2 Connect 1.0.0, "Interruption of the process": a pairing attempt that is not completed successfully is a failed attempt. With a wrong token the WWCP S2 client reports the failure with `finalizePairing`, and the CEM still lists the RM as paired. | `ResflexCEMTests.WWCPPairingClient_WithAWrongPairingToken_IsRejected` | `s2_cem_lib/pairing/views.py` (`RequestPairingView`: `server.paired_nodes[client_node_id] = node` and `save_paired_nodes` before the HMAC exchange; `FinalizePairingView` only deletes the attempt) |
+| E2 | The access token the RM receives in the connection details is never persisted. `requestPairing` persists a first token, `requestConnectionDetails` replaces it in memory with the one it sends, without saving. A CEM restarted between pairing and the first session — which persists the rotated token — answers `initiateSession` with 401: the pairing is lost on the CEM side, the RM is told to re-pair. | `ResflexCEMTests.WWCPResourceManager_ConnectsAfterARestartOfTheResflexCEM` | `s2_cem_lib/pairing/views.py` (`RequestConnectionDetailsView`: `node.access_token = access_token` without `save_paired_nodes`) |
+
+### Behaviour WWCP S2 has to account for (no defect, no test marker)
+
+* The CEM supports only the S2 message version `0.0.2-beta` (`run.py`:
+  `supported_s2_message_versions=["0.0.2-beta"]`, as the driver configures it). A WWCP S2 node
+  that offers only `v1.0.0` (the `HostedNode` default) gets `IncompatibleS2MessageVersions` at
+  `requestPairing`; the tests' RM offers `Version.S2JSONVersions` (`v1.0.0` and `0.0.2-beta`),
+  and the session runs on `0.0.2-beta`.
+* The `initiateSessionUrl` of the connection details has no trailing slash
+  (`https://host:port/api/s2_pebc/connection`). S2 Connect does not require one there (D5
+  below); WWCP S2 required it until `1ad982f` and failed the pairing after
+  `requestConnectionDetails`, and now completes it.
+* Both APIs live under `/api/s2_pebc/` (`/api/s2_pebc/pairing/`, `/api/s2_pebc/connection/`,
+  the WebSocket at `/api/s2_pebc/ws`), which the pairing URL and the connection details
+  announce.
+* The CEM ignores the pairing target (`nodeId`/`nodeIdAlias`) of `requestPairing`; the tests
+  pair by node identification. Dynamic pairing tokens are 6 letters and digits, valid 5
+  minutes; the tests use a fixed token (the engine's `--pairing-token`).
+* `s2_cem_lib/pyproject.toml` would install the library's subpackages at the top level, so it
+  is imported from the submodule, as `run.py` does. Its dependencies (s2-python from
+  `libs/s2-python`, aiohttp, zeroconf) live in `.venv-resflex`; it requires Python 3.13.
+
+### Observation from reading the code (not tested)
+
+* In the WAN deployment the HMAC is bound to `self.request.host`, which includes the port when
+  the client's `Host` header has one. S2 Connect describes `D` as "the domain name of the HTTPS
+  server, including subdomains" (e.g. `pairing.s2.example.com`); WWCP S2 leaves the port out.
+* `finalizePairing` is accepted in any order (S2 Connect: `success: true` before
+  `requestConnectionDetails` must be answered with 400), and `postConnectionDetails` verifies
+  the challenge but discards the connection details.
+* The `Handshake` handler selects the CEM's newest version even when the RM offers none it
+  supports. Not exercised: the S2 Connect sessions of the tests carry no `Handshake`.
+
+### Confirmed to work
+
+* Pairing over TLS in the LAN deployment: the LAN formula with the SHA-256 fingerprint of the
+  leaf certificate agrees on both sides, the WWCP S2 client receives the CEM's node
+  description and session initiation URL, and the three requests of a pairing client are
+  answered with 200, 200 and 204.
+* A wrong pairing token is detected at the first challenge response by the WWCP S2 client,
+  which reports it with `finalizePairing` (see E1 for what the CEM keeps).
+* Session initiation with access token rotation (`initiateSession`, `confirmAccessToken`):
+  the token confirmed by the WWCP S2 client is the one the CEM persists, and the WebSocket at
+  the announced URL accepts the communication token.
+* A PEBC session on it: the CEM acknowledges the `ResourceManagerDetails` and selects PEBC,
+  stores the `PEBC.PowerConstraints` of the WWCP S2 RM, sends a `PEBC.Instruction` that refers
+  to them, and acknowledges the RM's `InstructionStatusUpdate` (NEW) with `ReceptionStatus`
+  OK. Every message on the WWCP S2 side validates against the schemas.
+* Unpairing by the RM (`/connection/v1/unpair`, 204): the CEM drops and persists the pairing.
+
 ## The S2 documentation (structured-documentation, main)
 
 `libs/s2-documentation/structured-documentation/*.toml` documents the data model, one file
@@ -230,6 +297,12 @@ S2's types (`S2DocumentationTests`):
 Everything else agrees: the 36 messages, the fields and their optionality of every documented
 object, the values of every other enumeration; and WWCP S2 accepts every documented
 enumeration value the schemas have.
+
+And in the S2 Connect 1.0.0 text (`discovery-pairing-authentication.md`):
+
+| # | Finding | Test |
+|---|---|---|
+| D5 | The trailing slash of a base URL is a "must" only for the pairing URL ("Pairing URL"), the `longpollingUrl` and the `pairingUrl` of the WAN endpoint registry. The `initiateSessionUrl` is "the base URL for the connection process (does not include the version number)", and only the example of the session initiation (`https://hostname.local/connection/`) has a slash. WWCP S2 applied the pairing URL rule to it until `1ad982f`; the ElaadNL CEM sends none. Not a defect of either, but a rule the text should state once for every base URL. | `ResflexCEMTests.WWCPPairingClient_PairsWithTheResflexCEM_LAN`, `PairingDTOTests.ConnectionDetails_CompletesTheTrailingSlashOfTheInitiateSessionUrl` (WWCP_S2Tests) |
 
 ## Hermod (the WebSocket client on Linux) — fixed
 
@@ -253,7 +326,8 @@ what the Debian leg found on its first day.
 When a submodule is bumped, run the suite: a known-issue test that turns into a failure means
 the upstream behaviour changed; remove its `Interop.KnownIssue` marker, move the finding to
 "Confirmed to work" here and note the version. The `upstream-drift.yml` workflow runs the suite
-against the upstream default branches of s2-python, s2-rust and s2auth, and the specification
+against the upstream default branches of s2-python, s2-rust, s2auth and
+resflex-open-s2-hems-connector, and the specification
 tests against those of s2-json, s2-connect and s2-documentation, every night, so such a change
 shows up there first, before any pin is bumped. A Hermod or Styx defect found here is fixed
 there and the pin bumped (H1 and H2 were); until then its tests carry a marker, evaluated on

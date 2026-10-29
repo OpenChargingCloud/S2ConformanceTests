@@ -13,7 +13,9 @@ C# / .NET developed alongside it — against the reference implementations
 [s2-python](https://github.com/flexiblepower/s2-python),
 [s2-rust](https://github.com/flexiblepower/s2-rust) and
 [s2auth](https://github.com/flexiblepower/s2auth) in both roles and both directions, and
-holds its embedded copies of the normative material (the S2 JSON schemas, the S2 Connect
+as a resource manager against the S2 CEM library of the ElaadNL Residential Flexibility
+initiative ([resflex-open-s2-hems-connector](https://github.com/ElaadNL/resflex-open-s2-hems-connector)),
+and holds its embedded copies of the normative material (the S2 JSON schemas, the S2 Connect
 OpenAPI files, the structured documentation of the data model) to the pinned upstream
 sources. It is Phase 11b of the WWCP S2 development plan, moved out of the library
 repository so that "does our stack interoperate" is a question this repository answers and
@@ -23,11 +25,12 @@ the library does not have to carry.
 
 | Directory | Content |
 |-----------|---------|
-| `S2InteropTests/` | The NUnit test project. `Python/`, `Rust/` and `S2Auth/` hold the interoperability tests (category `Interop`, plus `s2-python`, `s2-rust` or `s2auth` per peer): message round trips, rejection of malformed messages, plain-mode WebSocket sessions, S2 Connect pairing and session initiation. `Specification/` holds the drift tests (category `Specification`): the schemas and OpenAPI files WWCP S2 embeds against the pinned upstream files, and the structured documentation against the schemas and WWCP S2's types. `Harness/` holds the driver control, the schema-validating traffic recorder and the known-issue marker. |
+| `S2InteropTests/` | The NUnit test project. `Python/`, `Rust/`, `S2Auth/` and `Resflex/` hold the interoperability tests (category `Interop`, plus `s2-python`, `s2-rust`, `s2auth` or `resflex` per peer): message round trips, rejection of malformed messages, plain-mode WebSocket sessions, S2 Connect pairing and session initiation, a PEBC session. `Specification/` holds the drift tests (category `Specification`): the schemas and OpenAPI files WWCP S2 embeds against the pinned upstream files, and the structured documentation against the schemas and WWCP S2's types. `Harness/` holds the driver control, the schema-validating traffic recorder and the known-issue marker. |
 | `tools/s2-python-harness/` | The s2-python drivers: `s2_echo.py` (message round trips), `s2_rm.py` (an FRBC resource manager), `s2_cem.py` (a CEM WebSocket server). |
 | `tools/s2-rust-harness/` | The s2-rust drivers, a cargo crate: `s2-json-echo`, `s2-hmac`, `s2-pairing-server`, `s2-pairing-client`, `s2-comm-server`, `s2-comm-client`. |
 | `tools/s2auth-harness/` | The s2auth drivers: `s2auth_client.py` (the pairing client, reporting every HTTP exchange) and `s2auth_server.py` (the reference server behind uvicorn, on a port of the test's choosing). |
-| [`FINDINGS.md`](FINDINGS.md) | What the tests found in s2-python, s2-rust, s2auth, the S2 documentation and Hermod: the reproducing test, the place upstream and the consequence for WWCP S2. |
+| `tools/resflex-harness/` | The driver of the ElaadNL CEM library: `resflex_cem.py` (its `S2CemApp`, wired as its standalone engine wires it, behind aiohttp with TLS on a port of the test's choosing, reporting every HTTP request, every persisted pairing and every WebSocket frame, and sending PEBC instructions on command). |
+| [`FINDINGS.md`](FINDINGS.md) | What the tests found in s2-python, s2-rust, s2auth, the ElaadNL CEM library, the S2 documentation and Hermod: the reproducing test, the place upstream and the consequence for WWCP S2. |
 | `libs/` | Git submodules: the stack under test, its foundations, the reference implementations and the normative material. |
 
 The drivers are started as child processes and talk JSON lines on stdin/stdout, so the C#
@@ -45,6 +48,7 @@ gets exactly one `ReceptionStatus`.
 | [`libs/s2-python`](https://github.com/flexiblepower/s2-python) | Reference implementation #1 (v0.11.1): pydantic models and `S2AsyncConnection` over WebSockets in plain mode with the `Handshake` exchange. Installed into a virtual environment by the tests. |
 | [`libs/s2-rust`](https://github.com/flexiblepower/s2-rust) | Reference implementation #2: the message layer (`s2energy-messaging`, generated from its own JSON schema) and S2 Connect pairing, session initiation and communication (`s2energy-connection`). Wrapped by the driver binaries. |
 | [`libs/s2auth`](https://github.com/flexiblepower/s2auth) | Reference implementation #3 (v0.1.0): S2 Connect pairing and session initiation in Python (client library, FastAPI reference server), the HTTP part only. Installed into its own virtual environment by the tests. |
+| [`libs/resflex-open-s2-hems-connector`](https://github.com/ElaadNL/resflex-open-s2-hems-connector) | The open reference implementation of a CEM of the ElaadNL Residential Flexibility initiative (`c12c857`, the initial public release, no tag yet): `s2_cem_lib`, a Python library with its own S2 Connect pairing, session initiation and long polling on aiohttp, the S2 messages from s2-python, and PEBC as its only control type. Imported from the submodule by the driver; its dependencies live in a virtual environment of their own. |
 | [`libs/s2-json`](https://github.com/flexiblepower/s2-json) | **The normative S2 JSON schemas** (v1.0.0 plus the erratum of s2-json#32, commit `02772ed`, which only corrects two descriptions in `ControlType.schema.json`): 36 message and 41 type schemas. WWCP S2 embeds a copy; the drift tests compare the two. |
 | [`libs/s2-connect`](https://github.com/flexiblepower/s2-connect) | **The normative S2 Connect OpenAPI files** (tag v1.0): pairing, session initiation, common types, WAN endpoint registry. WWCP S2 embeds a copy; the drift tests compare the two. |
 | [`libs/s2-documentation`](https://github.com/flexiblepower/s2-documentation) | The S2 documentation website and its `structured-documentation/` (one TOML file per message, object and enumeration, the source of the data model reference), held against the schemas and WWCP S2's types. |
@@ -55,15 +59,16 @@ git clone --recurse-submodules https://github.com/OpenChargingCloud/S2Conformanc
 
 ## What is tested
 
-| Area | s2-python | s2-rust | s2auth |
-|---|---|---|---|
-| All 36 S2 JSON messages: serialise with WWCP S2, parse and re-serialise with the reference implementation, parse back strictly, compare | yes | yes | – |
-| Rejection of malformed messages (non-UUID identifiers, naive timestamps, unknown types, missing and additional properties, unknown enumeration values, semantic rules) | yes | yes | – |
-| Plain-mode WebSocket session with the `Handshake` exchange (`0.0.2-beta` / `v1.0.0` selection, no common version), `ResourceManagerDetails`, `SelectControlType`, the FRBC system description and statuses, an instruction with its `InstructionStatusUpdate`, `SessionRequest TERMINATE` | WWCP CEM ↔ s2-python RM and WWCP RM ↔ s2-python CEM | – (s2-rust has no plain WebSocket transport any more) | – |
-| `ReceptionStatus` rules: `INVALID_DATA` for non-JSON, `INVALID_MESSAGE` for unknown types, `INVALID_CONTENT` for out-of-state messages, bearer token rejection with 401 | yes | – | – |
-| S2 Connect challenge-response function (LAN and WAN formulas, token encoding) | – | yes | – |
-| S2 Connect pairing over TLS (both directions, wrong-token rejection) | – | yes (LAN) | yes (LAN and WAN) |
-| S2 Connect session initiation with access token rotation, the WebSocket session and S2 messages on it, unpairing (both directions) | – | yes | HTTP part only (s2auth has no communication server); the known issues in FINDINGS.md block the rest |
+| Area | s2-python | s2-rust | s2auth | resflex |
+|---|---|---|---|---|
+| All 36 S2 JSON messages: serialise with WWCP S2, parse and re-serialise with the reference implementation, parse back strictly, compare | yes | yes | – | – |
+| Rejection of malformed messages (non-UUID identifiers, naive timestamps, unknown types, missing and additional properties, unknown enumeration values, semantic rules) | yes | yes | – | – |
+| Plain-mode WebSocket session with the `Handshake` exchange (`0.0.2-beta` / `v1.0.0` selection, no common version), `ResourceManagerDetails`, `SelectControlType`, the FRBC system description and statuses, an instruction with its `InstructionStatusUpdate`, `SessionRequest TERMINATE` | WWCP CEM ↔ s2-python RM and WWCP RM ↔ s2-python CEM | – (s2-rust has no plain WebSocket transport any more) | – | – |
+| `ReceptionStatus` rules: `INVALID_DATA` for non-JSON, `INVALID_MESSAGE` for unknown types, `INVALID_CONTENT` for out-of-state messages, bearer token rejection with 401 | yes | – | – | – |
+| S2 Connect challenge-response function (LAN and WAN formulas, token encoding) | – | yes | – | – |
+| S2 Connect pairing over TLS (both directions, wrong-token rejection) | – | yes (LAN) | yes (LAN and WAN) | WWCP RM → resflex CEM (LAN) |
+| S2 Connect session initiation with access token rotation, the WebSocket session and S2 messages on it, unpairing (both directions) | – | yes | HTTP part only (s2auth has no communication server); the known issues in FINDINGS.md block the rest | WWCP RM → resflex CEM, and a pairing across a restart of the CEM |
+| PEBC over S2 Connect: `ResourceManagerDetails`, `SelectControlType` PEBC, `PEBC.PowerConstraints`, a `PEBC.Instruction` within them, `InstructionStatusUpdate` NEW | – | – | – | WWCP RM → resflex CEM |
 
 And, without an external implementation (category `Specification`): the 77 S2 JSON schema
 files and the 4 S2 Connect OpenAPI files WWCP S2 embeds are the pinned upstream files and the
@@ -75,9 +80,9 @@ value is accepted by the WWCP S2 type of that name.
 ## Findings
 
 [FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and 0.11.1, s2-rust, s2auth
-0.1.0, the S2 documentation and Hermod, with the test that reproduces each finding, the place
-upstream and the consequence for WWCP S2. State on 2026-10-29: 128 tests, 108 passed,
-20 known issues, 0 failed. Known issues are pinned in their tests with
+0.1.0, the ElaadNL CEM library, the S2 documentation and Hermod, with the test that reproduces each finding, the place
+upstream and the consequence for WWCP S2. State on 2026-10-29: 133 tests, 111 passed,
+22 known issues, 0 failed. Known issues are pinned in their tests with
 `Interop.KnownIssue(...)`: they end with a warning while the issue exists and fail once the
 upstream behaviour changes, so that the marker gets removed and the fix recorded.
 
@@ -92,12 +97,14 @@ dotnet test S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|
 ```
 
 The interoperability tests start the reference implementations as external peers and
-therefore need, besides the .NET 10 SDK, a Python 3.11–3.14 interpreter (s2-python, s2auth)
-and a Rust toolchain installed with [rustup](https://rustup.rs) (s2-rust). The tests look for
+therefore need, besides the .NET 10 SDK, a Python 3.11–3.14 interpreter (s2-python, s2auth;
+the ElaadNL CEM library needs 3.13 or 3.14) and a Rust toolchain installed with [rustup](https://rustup.rs) (s2-rust). The tests look for
 `cargo` on the PATH, in `~/.cargo/bin` or in `S2_INTEROP_CARGO`, and the lock file of
 `tools/s2-rust-harness` wants at least Rust 1.88, so a distribution's own cargo package may
 be both invisible and too old. The first run creates `.venv-s2python/` from
-`libs/s2-python` and `.venv-s2auth/` from `libs/s2auth`, and builds `tools/s2-rust-harness`.
+`libs/s2-python`, `.venv-s2auth/` from `libs/s2auth` and `.venv-resflex/` (s2-python from
+`libs/s2-python` plus aiohttp and zeroconf, the dependencies of `s2_cem_lib`, which is
+imported from its submodule), and builds `tools/s2-rust-harness`.
 Fixtures whose toolchain is missing are skipped with a message; set `S2_INTEROP_REQUIRE=1`
 (as the CI does) to turn that into a failure. The specification tests need nothing but the
 checked-out submodules.
@@ -128,6 +135,8 @@ checked before each such test, which is skipped with a message when they are not
 | `S2_INTEROP_VENV` | the s2-python venv directory (default `.venv-s2python`) |
 | `S2_INTEROP_S2AUTH_PYTHON` | a Python interpreter with `s2auth[client,server]` installed (skips the venv) |
 | `S2_INTEROP_S2AUTH_VENV` | the s2auth venv directory (default `.venv-s2auth`) |
+| `S2_INTEROP_RESFLEX_PYTHON` | a Python interpreter (3.13 or later) with s2-python, aiohttp and zeroconf installed (skips the venv) |
+| `S2_INTEROP_RESFLEX_VENV` | the venv of the ElaadNL CEM library (default `.venv-resflex`) |
 | `S2_INTEROP_LOG_LEVEL` | the log level of WWCP S2 and Hermod in the test output (default `Warning`) |
 | `S2_INTEROP_CARGO` | the cargo executable |
 | `S2_INTEROP_WSL_DISTRO` | the WSL distribution for the S2 Connect drivers (default: the default distribution) |
@@ -141,12 +150,12 @@ checked before each such test, which is skipped with a message when they are not
 platform the stack runs on in production, and the only leg that can build
 `s2energy-connection`, so it runs everything and treats a missing toolchain as a failure)
 and Windows (where the S2 Connect fixtures skip for want of WSL; the s2-python tests and the
-s2-rust message layer are the gate there). Both legs also run the WWCP S2 stack's own tests
+s2-rust message layer, s2auth and resflex are the gate there). Both legs also run the WWCP S2 stack's own tests
 against the submodule pins. `nightly.yml` repeats the pinned suite every night, for the
 timing races two implementations over loopback can produce and for the toolchains that move
 without a push (Rust stable, Python and .NET SDK patches). `upstream-drift.yml` moves the
 submodules to their upstream default branches first — WWCP S2, Hermod and Styx in one job,
-s2-python, s2-rust and s2auth in a second, the normative material (s2-json, s2-connect,
+s2-python, s2-rust, s2auth and resflex in a second, the normative material (s2-json, s2-connect,
 s2-documentation) in a third — so that a change upstream, including a known issue that stops
 reproducing or a schema that moved, is reported the night it lands rather than at the next
 pin bump. All three upload the `.trx` results, which keep the skip reasons and the known-issue
@@ -157,4 +166,5 @@ warnings the console log does not show.
 GNU Affero General Public License 3.0 or later, see
 [WWCP_S2](https://github.com/OpenChargingCloud/WWCP_S2/blob/master/LICENSE). s2-python,
 s2-rust, s2auth, s2-json, s2-connect and s2-documentation are Apache-2.0 licensed by the
-FlexiblePower Alliance Network; see the submodules for their licenses.
+FlexiblePower Alliance Network, resflex-open-s2-hems-connector is Apache-2.0 licensed by
+ElaadNL; see the submodules for their licenses.

@@ -180,7 +180,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
                                                                     WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
 
             var viaConnectionAPI  = await announced.InitiateSessionAsync(node, serverNodeId);
-            var trail             = S2AuthPairingTests.ServerTrail(server);
+            var trail             = await S2AuthPairingTests.ServerTrailAsync(server, "/initiateSession");
 
             Interop.KnownIssue("s2auth's connection initiation API (the announced initiateSessionUrl) has no initiateSession operation: it is called initiateConnection and reads the token from an accessToken header",
                                !viaConnectionAPI.IsSuccess &&
@@ -195,7 +195,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
                                                                         WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
 
             var viaPairingAPI  = await viaPairingURL.InitiateSessionAsync(node, serverNodeId);
-            trail              = S2AuthPairingTests.ServerTrail(server);
+            trail              = await S2AuthPairingTests.ServerTrailAsync(server, "/confirmAccessToken");
 
             Assert.That(trail, Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/initiateSession", 200)),
                         () => $"initiateSession with the access token from pairing succeeds at s2auth's pairing API{Environment.NewLine}{viaPairingAPI}{Environment.NewLine}{server.Diagnostics}");

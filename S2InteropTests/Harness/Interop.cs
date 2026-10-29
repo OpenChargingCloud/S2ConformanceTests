@@ -70,6 +70,23 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         }
 
         /// <summary>
+        /// Make sure the ElaadNL S2 CEM library is usable; skips the fixture (Assert.Ignore)
+        /// when its toolchain is missing and S2_INTEROP_REQUIRE is not set.
+        /// </summary>
+        public static async Task RequireResflexAsync()
+        {
+            try
+            {
+                await ResflexHarness.EnsureReadyAsync();
+                TestContext.Progress.WriteLine($"[resflex] {ResflexHarness.Versions}");
+            }
+            catch (ToolchainMissingException e) when (!Toolchains.Required)
+            {
+                Assert.Ignore("resflex tests skipped: " + e.Message);
+            }
+        }
+
+        /// <summary>
         /// Make sure the s2-rust harness is built for the given driver; skips the fixture
         /// (Assert.Ignore) when cargo (or, for the S2 Connect drivers on Windows, WSL with
         /// cargo) is missing and S2_INTEROP_REQUIRE is not set.

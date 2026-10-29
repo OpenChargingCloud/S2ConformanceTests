@@ -73,11 +73,12 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         /// Tries S2_INTEROP_BASE_PYTHON, the Windows launcher "py -3.14" …
         /// "py -3.11", and "python3.14" … "python3.11", "python3", "python" on the PATH.
         /// </summary>
-        public static async Task<String?> FindBasePythonAsync()
+        /// <param name="MinimumMinor">The lowest Python 3 minor version accepted (default 11; the ElaadNL CEM library needs 13).</param>
+        public static async Task<String?> FindBasePythonAsync(Int32 MinimumMinor = 11)
         {
 
             var candidates  = new List<String[]>();
-            var versions    = new[] { "3.14", "3.13", "3.12", "3.11" };
+            var versions    = new[] { "3.14", "3.13", "3.12", "3.11" }.Where(version => Int32.Parse(version[2..], CultureInfo.InvariantCulture) >= MinimumMinor).ToArray();
 
             if (Environment.GetEnvironmentVariable("S2_INTEROP_BASE_PYTHON") is { Length: > 0 } configured)
                 candidates.Add([ configured ]);
@@ -120,7 +121,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                     if (parts.Length == 2 &&
                         Int32.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var major) &&
                         Int32.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var minor) &&
-                        major == 3 && minor >= 11 && minor <= 14)
+                        major == 3 && minor >= MinimumMinor && minor <= 14)
                     {
                         return lines[0];
                     }

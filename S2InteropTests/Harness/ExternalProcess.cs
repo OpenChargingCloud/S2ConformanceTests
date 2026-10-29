@@ -345,6 +345,33 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
 
         #endregion
 
+        #region SawEventAsync(Predicate, Timeout = null)
+
+        /// <summary>
+        /// Whether an event matching the predicate was received or arrives within the timeout.
+        /// For what a driver reports about a request the test itself made: the driver writes the
+        /// event while it answers, but stdout is read asynchronously here, so the HTTP response
+        /// can overtake it, and a snapshot of <see cref="Events"/> taken right after the response
+        /// may still lack it.
+        /// </summary>
+        /// <param name="Predicate">The event filter.</param>
+        /// <param name="Timeout">An optional timeout (default: 5 seconds).</param>
+        public async Task<Boolean> SawEventAsync(Func<JObject, Boolean>  Predicate,
+                                                 TimeSpan?               Timeout   = null)
+        {
+            try
+            {
+                await WaitForEventAsync(Predicate, Timeout ?? TimeSpan.FromSeconds(5));
+                return true;
+            }
+            catch (Exception e) when (e is TimeoutException or InvalidOperationException)
+            {
+                return false;
+            }
+        }
+
+        #endregion
+
         #region WaitForExitAsync(Timeout = null)
 
         /// <summary>

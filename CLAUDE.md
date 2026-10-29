@@ -3,7 +3,9 @@
 Conformance and interoperability test suite for the S2 stack in the `libs/WWCP_S2` submodule
 (S2 JSON v1.0.0 messages, S2 Connect pairing and session initiation), run against the
 reference implementations s2-python (`libs/s2-python`), s2-rust (`libs/s2-rust`) and s2auth
-(`libs/s2auth`) in both roles and both directions, plus drift tests holding WWCP_S2's embedded
+(`libs/s2auth`) in both roles and both directions, as an RM against the S2 CEM library of the
+ElaadNL Residential Flexibility initiative (`libs/resflex-open-s2-hems-connector`), plus drift
+tests holding WWCP_S2's embedded
 copies to the pinned normative material (`libs/s2-json`, `libs/s2-connect`,
 `libs/s2-documentation`). Phase 11b of WWCP_S2's PLAN.md, carried here so that the library
 does not have to.
@@ -18,8 +20,8 @@ does not have to.
 - **The stack under test:** `libs/WWCP_S2/` — its own README, PLAN.md and `docs/` document
   the protocol and the design. It references Styx and Hermod as sibling directories, hence
   `libs/Styx` and `libs/Hermod`.
-- **The drivers:** `tools/s2-python-harness/*.py`, `tools/s2auth-harness/*.py` and the cargo
-  crate `tools/s2-rust-harness/`. Child processes speaking JSON lines on stdin/stdout,
+- **The drivers:** `tools/s2-python-harness/*.py`, `tools/s2auth-harness/*.py`,
+  `tools/resflex-harness/*.py` and the cargo crate `tools/s2-rust-harness/`. Child processes speaking JSON lines on stdin/stdout,
   scripted by the tests through `ExternalProcess`; every message that crosses the wire on the
   WWCP side is validated against the embedded schemas by `TrafficRecorder`.
 - **The drift tests:** `S2InteropTests/Specification/` (category `Specification`, no
@@ -35,8 +37,10 @@ dotnet build S2InteropTests/S2InteropTests.csproj
 dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|TestCategory=Specification"
 ```
 
-Expected (2026-10-29): 128 tests, 108 passed, 20 known issues (warnings), 0 failed, on
-Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.11–3.14, Rust via rustup. On
+Expected (2026-10-29): 133 tests, 111 passed, 22 known issues (warnings), 0 failed, on
+Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.11–3.14 (3.13 or later for the
+ElaadNL CEM library, whose `s2_cem_lib` is imported from the submodule, not installed), Rust
+via rustup. On
 Windows that means two installations, and both are needed for the full suite: a native one
 for the message-layer drivers (`rustup-init.exe`, plus the MSVC build tools for the linker),
 and one inside WSL for the S2 Connect drivers (Debian with rustup; `s2energy-connection` is
@@ -60,7 +64,7 @@ makes that a failure. All `S2_INTEROP_*` variables are listed in README.md.
 - Never change wire behaviour of WWCP S2 because a reference implementation differs: check
   the specification text first (quoted in FINDINGS.md; the OpenAPI files are in
   `libs/s2-connect/openapi`, the schemas in `libs/s2-json`). The reference implementations
-  have been wrong before (P1–P4, R1–R7, A1–A4), and so has the documentation (D1–D4).
+  have been wrong before (P1–P4, R1–R7, A1–A4, E1–E2), and so has the documentation (D1–D5).
 - Hermod bugs found here are fixed in Hermod (H1 and H2 were: Hermod `483eb54`, `3d92759`),
   not worked around in WWCP_S2 or here; until the pin bump their tests carry a
   platform-conditional `Interop.KnownIssue` marker.

@@ -25,3 +25,6 @@
 [submodule "libs/s2-documentation"]
 	path = libs/s2-documentation
 	url = https://github.com/flexiblepower/s2-documentation.git
+[submodule "libs/resflex-open-s2-hems-connector"]
+	path = libs/resflex-open-s2-hems-connector
+	url = https://github.com/ElaadNL/resflex-open-s2-hems-connector.git

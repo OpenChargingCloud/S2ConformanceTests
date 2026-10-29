@@ -3,7 +3,7 @@ name: Upstream drift
 # The third workflow, and the only one that does not test what this repository says it
 # tests. ci.yml and nightly.yml both build against the submodule PINS: whatever SHA
 # libs/WWCP_S2, libs/Hermod, libs/Styx, the reference implementations (s2-python, s2-rust,
-# s2auth) and the normative material (s2-json, s2-connect, s2-documentation) are frozen at.
+# s2auth, resflex) and the normative material (s2-json, s2-connect, s2-documentation) are frozen at.
 # That is the right thing for a gate — it is reproducible, and a red run is unambiguously
 # about code somebody here wrote.
 #
@@ -17,7 +17,7 @@ name: Upstream drift
 #
 #   dotnet-stack red              -> WWCP S2, Hermod or Styx moved and the suite does not
 #                                    survive it yet. Queued before the next pin bump.
-#   reference-implementations red -> s2-python, s2-rust or s2auth changed. Either they
+#   reference-implementations red -> s2-python, s2-rust, s2auth or resflex changed. Either they
 #                                    broke something the suite relies on — or they FIXED
 #                                    one of the findings in FINDINGS.md: every known issue
 #                                    is pinned by an Interop.KnownIssue marker that fails
@@ -174,13 +174,13 @@ jobs:
         run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=Interop|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-interop.trx" --results-directory artifacts
 
       # Two steps on Windows, see ci.yml.
-      - name: Interoperability tests against s2-python and s2auth, specification tests
+      - name: Interoperability tests against s2-python, s2auth and resflex, specification tests
         if: runner.os == 'Windows'
         timeout-minutes: 30
         env:
           S2_INTEROP_REQUIRE: "1"
           S2_INTEROP_SKIP_CARGO_BUILD: "1"
-        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python|TestCategory=s2auth|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
+        run: dotnet test S2InteropTests/S2InteropTests.csproj --configuration Release --no-build --filter "TestCategory=s2-python|TestCategory=s2auth|TestCategory=resflex|TestCategory=Specification" --logger "console;verbosity=normal" --logger "trx;LogFileName=drift-${{ matrix.leg }}-s2-python.trx" --results-directory artifacts
 
       - name: Interoperability tests against s2-rust (message layer)
         if: runner.os == 'Windows'
@@ -201,7 +201,7 @@ jobs:
 
 
   reference-implementations:
-    name: Against upstream s2-python/s2-rust/s2auth
+    name: Against upstream s2-python/s2-rust/s2auth/resflex
     runs-on: ubuntu-latest
     container: debian:13
     # Debian only: this is the leg that runs the whole suite, S2 Connect included, and a
@@ -227,10 +227,11 @@ jobs:
           submodules: recursive
 
       # Only the reference implementations move here — the .NET side stays pinned on
-      # purpose, so that a red run in this job means "s2-python, s2-rust or s2auth changed"
-      # and nothing else. Note what the pins are: s2-python and s2auth sit on release tags
-      # (v0.11.1, v0.1.0), s2-rust on a commit of main, and all three default branches are
-      # "main" — read from the remote rather than hardcoded, as in the job above.
+      # purpose, so that a red run in this job means "s2-python, s2-rust, s2auth or resflex
+      # changed" and nothing else. Note what the pins are: s2-python and s2auth sit on release
+      # tags (v0.11.1, v0.1.0), s2-rust and resflex-open-s2-hems-connector on a commit of main
+      # (the latter has no release yet), and all four default branches are "main" — read from
+      # the remote rather than hardcoded, as in the job above.
       - name: Move the reference implementations to their upstream default branch
         shell: bash
         run: |
@@ -241,7 +242,7 @@ jobs:
             echo "|---|---|---|---|"
           } >> "$GITHUB_STEP_SUMMARY"
 
-          for module in s2-python s2-rust s2auth; do
+          for module in s2-python s2-rust s2auth resflex-open-s2-hems-connector; do
           (
             cd "libs/$module"
             pinned=$(git rev-parse --short HEAD)
@@ -430,7 +431,7 @@ jobs:
           fi
           if [ "$REFERENCE" = "failure" ]; then
             legs="$legs reference-implementations"
-            read_of="$read_of- \`Against upstream s2-python/s2-rust/s2auth\`: a reference implementation changed. Either it broke something the suite relies on, or it FIXED a finding in FINDINGS.md - the failure names the \`Interop.KnownIssue\` marker to remove.\n"
+            read_of="$read_of- \`Against upstream s2-python/s2-rust/s2auth/resflex\`: a reference implementation changed. Either it broke something the suite relies on, or it FIXED a finding in FINDINGS.md - the failure names the \`Interop.KnownIssue\` marker to remove.\n"
           fi
           if [ "$SPEC" = "failure" ]; then
             legs="$legs specification"
