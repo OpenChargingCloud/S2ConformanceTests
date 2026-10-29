@@ -66,7 +66,7 @@ git clone --recurse-submodules https://github.com/OpenChargingCloud/S2Conformanc
 | Plain-mode WebSocket session with the `Handshake` exchange (`0.0.2-beta` / `v1.0.0` selection, no common version), `ResourceManagerDetails`, `SelectControlType`, the FRBC system description and statuses, an instruction with its `InstructionStatusUpdate`, `SessionRequest TERMINATE` | WWCP CEM ↔ s2-python RM and WWCP RM ↔ s2-python CEM | – (s2-rust has no plain WebSocket transport any more) | – | – |
 | `ReceptionStatus` rules: `INVALID_DATA` for non-JSON, `INVALID_MESSAGE` for unknown types, `INVALID_CONTENT` for out-of-state messages, bearer token rejection with 401 | yes | – | – | – |
 | S2 Connect challenge-response function (LAN and WAN formulas, token encoding) | – | yes | – | – |
-| S2 Connect pairing over TLS (both directions, wrong-token rejection) | – | yes (LAN) | yes (LAN and WAN) | WWCP RM → resflex CEM (LAN), and `finalizePairing` before the connection details |
+| S2 Connect pairing over TLS (both directions, wrong-token rejection) | – | yes (LAN) | yes (LAN and WAN) | WWCP RM → resflex CEM (LAN), `finalizePairing` before the connection details, and an unauthenticated re-pairing that evicts an established one |
 | S2 Connect session initiation with access token rotation, the WebSocket session and S2 messages on it, unpairing (both directions) | – | yes | HTTP part only (s2auth has no communication server); the known issues in FINDINGS.md block the rest | WWCP RM → resflex CEM, and a pairing across a restart of the CEM |
 | PEBC over S2 Connect: `ResourceManagerDetails`, `SelectControlType` PEBC, `PEBC.PowerConstraints`, a `PEBC.Instruction` within them, `InstructionStatusUpdate` NEW | – | – | – | WWCP RM → resflex CEM |
 
@@ -81,8 +81,8 @@ value is accepted by the WWCP S2 type of that name.
 
 [FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and 0.11.1, s2-rust, s2auth
 0.1.0, the ElaadNL CEM library, the S2 documentation and Hermod, with the test that reproduces each finding, the place
-upstream and the consequence for WWCP S2. State on 2026-10-29: 134 tests, 111 passed,
-23 known issues, 0 failed. Known issues are pinned in their tests with
+upstream and the consequence for WWCP S2. State on 2026-10-29: 135 tests, 111 passed,
+24 known issues, 0 failed. Known issues are pinned in their tests with
 `Interop.KnownIssue(...)`: they end with a warning while the issue exists and fail once the
 upstream behaviour changes, so that the marker gets removed and the fix recorded.
 

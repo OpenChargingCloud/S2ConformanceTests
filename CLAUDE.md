@@ -37,7 +37,7 @@ dotnet build S2InteropTests/S2InteropTests.csproj
 dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|TestCategory=Specification"
 ```
 
-Expected (2026-10-29): 134 tests, 111 passed, 23 known issues (warnings), 0 failed, on
+Expected (2026-10-29): 135 tests, 111 passed, 24 known issues (warnings), 0 failed, on
 Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.11–3.14 (3.13 or later for the
 ElaadNL CEM library, whose `s2_cem_lib` is imported from the submodule, not installed), Rust
 via rustup. On
@@ -64,7 +64,7 @@ makes that a failure. All `S2_INTEROP_*` variables are listed in README.md.
 - Never change wire behaviour of WWCP S2 because a reference implementation differs: check
   the specification text first (quoted in FINDINGS.md; the OpenAPI files are in
   `libs/s2-connect/openapi`, the schemas in `libs/s2-json`). The reference implementations
-  have been wrong before (P1–P4, R1–R7, A1–A4, E1–E3), and so has the documentation (D1–D5).
+  have been wrong before (P1–P4, R1–R7, A1–A4, E1–E4), and so has the documentation (D1–D5).
 - Hermod bugs found here are fixed in Hermod (H1 and H2 were: Hermod `483eb54`, `3d92759`),
   not worked around in WWCP_S2 or here; until the pin bump their tests carry a
   platform-conditional `Interop.KnownIssue` marker.

