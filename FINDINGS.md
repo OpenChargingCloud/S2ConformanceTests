@@ -7,7 +7,7 @@ issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-10-29: WWCP S2 `fec829f`, Hermod `14c9701`, Styx `f494c8c`, s2-python
+State on 2026-10-29: WWCP S2 `d2d6e8a`, Hermod `14c9701`, Styx `f494c8c`, s2-python
 v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0, s2-json
 `02772ed` (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
 (`d434762`), s2-documentation `316907e`. 128 tests: 108 passed, 20 known issues, 0 failed —
