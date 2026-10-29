@@ -169,6 +169,33 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Resflex
                     Deployment.LAN,
                     new PairingClientOptions { ServiceUnavailableRetryDelay = TimeSpan.FromMilliseconds(100) });
 
+        /// <summary>
+        /// POST a pairing request to the CEM by hand, outside the WWCP S2 pairing client, for
+        /// the orders of requests the client never produces. The certificate is not checked.
+        /// </summary>
+        private static async Task<(Int32 Status, JObject? Body)> PostPairingAsync(CEM                CEM,
+                                                                                  String             Operation,
+                                                                                  JObject            Body,
+                                                                                  PairingAttemptId?  PairingAttemptId   = null)
+        {
+
+            using var handler  = new HttpClientHandler { ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator };
+            using var http     = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
+            using var request  = new HttpRequestMessage(HttpMethod.Post, $"{CEM.PairingUrl}{Version.S2ConnectAPIVersion}/{Operation}") {
+                                     Content = new StringContent(Body.ToString(Newtonsoft.Json.Formatting.None), System.Text.Encoding.UTF8, "application/json")
+                                 };
+
+            if (PairingAttemptId.HasValue)
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", PairingAttemptId.Value.Value);
+
+            using var response = await http.SendAsync(request);
+            var text           = await response.Content.ReadAsStringAsync();
+
+            return ((Int32) response.StatusCode,
+                    text.TrimStart().StartsWith('{') ? JObject.Parse(text) : null);
+
+        }
+
         private static Task<JObject> WaitForReceivedAsync(CEM CEM, String MessageType, Func<JObject, Boolean>? Filter = null)
             => CEM.Process.WaitForEventAsync(e => e.Value<String>("event") == "received" &&
                                                   e["message"]?.Value<String>("message_type") == MessageType &&
@@ -282,6 +309,52 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Resflex
             Interop.KnownIssue("resflex E1: the CEM keeps the RM of a failed pairing attempt as paired",
                                persisted?.ContainsKey(node.Id.ToString()) == true,
                                $"persisted after finalizePairing (success: false): {persisted?.ToString(Newtonsoft.Json.Formatting.None)}");
+
+        }
+
+        #endregion
+
+        #region ResflexCEM_RejectsFinalizePairingBeforeTheConnectionDetails()
+
+        /// <summary>
+        /// A pairing client that confirms the pairing (finalizePairing, success: true) right
+        /// after requestPairing, without having requested the connection details. S2 Connect
+        /// 1.0.0, "Invalid interactions": the server must respond with 400 and consider the
+        /// pairing attempt as failed.
+        /// </summary>
+        [Test]
+        [S2C("Pairing.InvalidInteractions.ResflexCEM")]
+        public async Task ResflexCEM_RejectsFinalizePairingBeforeTheConnectionDetails()
+        {
+
+            await using var cem = await StartCEMAsync();
+
+            var (endpoint, node, _) = WWCPResourceManager();
+
+            var pairingRequest  = new RequestPairingRequest(node.Description,
+                                                            endpoint.Description,
+                                                            node.SupportedCommunicationProtocols,
+                                                            node.SupportedS2MessageVersions,
+                                                            [ HmacHashingAlgorithm.SHA256 ],
+                                                            HmacChallenge.NewRandom(),
+                                                            PairingTarget.ByNodeId(cem.NodeId));
+
+            var (pairingStatus, pairingBody) = await PostPairingAsync(cem, "requestPairing", pairingRequest.ToJSON());
+
+            Assert.That(pairingStatus, Is.EqualTo(200), () => $"requestPairing: {pairingBody}{Environment.NewLine}{cem.Process.Diagnostics}");
+            Assert.That(RequestPairingResponse.TryParse(pairingBody!, out var pairingResponse, out var parseError), Is.True, () => $"requestPairing response: {parseError}");
+
+            // The wrong order: the pairing is confirmed although the connection details were never requested.
+            var (finalizeStatus, finalizeBody) = await PostPairingAsync(cem, "finalizePairing", new FinalizePairingRequest(Success: true).ToJSON(), pairingResponse!.PairingAttemptId);
+
+            if (finalizeStatus is not 400 and not 204)
+                Assert.Fail($"finalizePairing (success: true) before requestConnectionDetails answered with {finalizeStatus}, neither the 400 of S2 Connect nor the 204 of E3: {finalizeBody}{Environment.NewLine}{cem.Process.Diagnostics}");
+
+            // FINDINGS.md, E3: FinalizePairingView neither reads success nor checks the order of
+            // the requests; it ends any attempt with 204.
+            Interop.KnownIssue("resflex E3: the CEM confirms finalizePairing (success: true) before requestConnectionDetails with 204 instead of 400",
+                               finalizeStatus == 204,
+                               $"finalizePairing (success: true) right after requestPairing: {finalizeStatus}");
 
         }
 

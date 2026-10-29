@@ -12,7 +12,7 @@ State on 2026-10-29: WWCP S2 `1ad982f`, Hermod `14c9701`, Styx `f494c8c`, s2-pyt
 v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0,
 resflex-open-s2-hems-connector `c12c857` (the initial public release), s2-json `02772ed`
 (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
-(`d434762`), s2-documentation `316907e`. 133 tests: 111 passed, 22 known issues, 0 failed —
+(`d434762`), s2-documentation `316907e`. 134 tests: 111 passed, 23 known issues, 0 failed —
 on Windows 11 with the S2 Connect drivers of s2-rust inside WSL. Every s2-python finding
 below was found in 0.10.0 and is still present in 0.11.1. Linux (Debian 13, everything
 native) has passed since Hermod `3d92759` (H1, H2 below) and is gated by ci.yml.
@@ -230,6 +230,7 @@ standalone engine (`cem_engine/run.py`) does, with the WWCP S2 `PairingClient` a
 |---|---|---|---|
 | E1 | A failed pairing attempt leaves the RM paired. `requestPairing` stores the client as a paired node with an access token (and persists it) before either challenge has been answered, and `finalizePairing` ignores `success: false`. S2 Connect 1.0.0, "Interruption of the process": a pairing attempt that is not completed successfully is a failed attempt. With a wrong token the WWCP S2 client reports the failure with `finalizePairing`, and the CEM still lists the RM as paired. | `ResflexCEMTests.WWCPPairingClient_WithAWrongPairingToken_IsRejected` | `s2_cem_lib/pairing/views.py` (`RequestPairingView`: `server.paired_nodes[client_node_id] = node` and `save_paired_nodes` before the HMAC exchange; `FinalizePairingView` only deletes the attempt) |
 | E2 | The access token the RM receives in the connection details is never persisted. `requestPairing` persists a first token, `requestConnectionDetails` replaces it in memory with the one it sends, without saving. A CEM restarted between pairing and the first session — which persists the rotated token — answers `initiateSession` with 401: the pairing is lost on the CEM side, the RM is told to re-pair. | `ResflexCEMTests.WWCPResourceManager_ConnectsAfterARestartOfTheResflexCEM` | `s2_cem_lib/pairing/views.py` (`RequestConnectionDetailsView`: `node.access_token = access_token` without `save_paired_nodes`) |
+| E3 | `finalizePairing` is accepted in any order. A client that confirms the pairing (`success: true`) right after `requestPairing`, without having requested the connection details, gets 204. S2 Connect 1.0.0, "Invalid interactions": a request in the wrong order (the example given is exactly this one) must be answered with 400, and the attempt is failed. Together with E1 the RM stays paired at the CEM with an access token it never received. | `ResflexCEMTests.ResflexCEM_RejectsFinalizePairingBeforeTheConnectionDetails` | `s2_cem_lib/pairing/views.py` (`FinalizePairingView`: parses the body, neither reads `success` nor checks which requests preceded it, deletes the attempt, 204) |
 
 ### Behaviour WWCP S2 has to account for (no defect, no test marker)
 
@@ -257,9 +258,7 @@ standalone engine (`cem_engine/run.py`) does, with the WWCP S2 `PairingClient` a
 * In the WAN deployment the HMAC is bound to `self.request.host`, which includes the port when
   the client's `Host` header has one. S2 Connect describes `D` as "the domain name of the HTTPS
   server, including subdomains" (e.g. `pairing.s2.example.com`); WWCP S2 leaves the port out.
-* `finalizePairing` is accepted in any order (S2 Connect: `success: true` before
-  `requestConnectionDetails` must be answered with 400), and `postConnectionDetails` verifies
-  the challenge but discards the connection details.
+* `postConnectionDetails` verifies the challenge but discards the connection details.
 * The `Handshake` handler selects the CEM's newest version even when the RM offers none it
   supports. Not exercised: the S2 Connect sessions of the tests carry no `Handshake`.
 
