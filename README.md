@@ -76,7 +76,7 @@ value is accepted by the WWCP S2 type of that name.
 
 [FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and 0.11.1, s2-rust, s2auth
 0.1.0, the S2 documentation and Hermod, with the test that reproduces each finding, the place
-upstream and the consequence for WWCP S2. State on 2026-10-25: 128 tests, 108 passed,
+upstream and the consequence for WWCP S2. State on 2026-10-29: 128 tests, 108 passed,
 20 known issues, 0 failed. Known issues are pinned in their tests with
 `Interop.KnownIssue(...)`: they end with a warning while the issue exists and fail once the
 upstream behaviour changes, so that the marker gets removed and the fix recorded.
