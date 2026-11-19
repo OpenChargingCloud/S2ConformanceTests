@@ -8,11 +8,11 @@ issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-10-29: WWCP S2 `1ad982f`, Hermod `14c9701`, Styx `f494c8c`, s2-python
-v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.0,
+State on 2026-11-19: WWCP S2 `1ad982f`, Hermod `14c9701`, Styx `f494c8c`, s2-python
+v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.1 (`a733abf`),
 resflex-open-s2-hems-connector `c12c857` (the initial public release), s2-json `02772ed`
 (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
-(`d434762`), s2-documentation `316907e`. 135 tests: 111 passed, 24 known issues, 0 failed —
+(`d434762`), s2-documentation `316907e`. 135 tests: 110 passed, 25 known issues, 0 failed —
 on Windows 11 with the S2 Connect drivers of s2-rust inside WSL. Every s2-python finding
 below was found in 0.10.0 and is still present in 0.11.1. Linux (Debian 13, everything
 native) has passed since Hermod `3d92759` (H1, H2 below) and is gated by ci.yml.
@@ -167,12 +167,13 @@ part of the system description; s2-rust shows the same shape (R6).
 * Every message on the wire in those sessions is schema valid and gets exactly one
   `ReceptionStatus`.
 
-## s2auth 0.1.0
+## s2auth 0.1.1
 
 The Python implementation of S2 Connect pairing and session initiation (a client library and
 a FastAPI reference server; no S2 communication server). Tested through the drivers of
 `tools/s2auth-harness`: as an RM pairing client against the WWCP S2 pairing server, and with
-the WWCP S2 clients against its reference server.
+the WWCP S2 clients against its reference server. A1 to A4 were found in 0.1.0; 0.1.1
+(`a733abf`, "Client sd") fixed A3, half of A4, and brought A5.
 
 ### Known issues
 
@@ -180,8 +181,8 @@ the WWCP S2 clients against its reference server.
 |---|---|---|---|
 | A1 | The client posts `initiateSession` (and `unpair`) to its *pairing* URL instead of the `initiateSessionUrl` it received in the connection details. Against a WWCP S2 CEM, whose session initiation API is served under `/connection/`, it gets 404 from the pairing API; and since Hermod does not mount two APIs under one path, an s2auth client cannot initiate a session with WWCP S2 at all. | `S2AuthSessionInitiationTests.S2AuthClient_InitiatesASessionWithTheWWCPServer` | `src/s2auth/client/pairing_core.py` (`connect`, `unpair`: `f'{pairing_uri}/initiateSession'` with `pairing_uri = details["pairing_server_url"]`) |
 | A2 | The client uses the pairing *target* as the server node identification and never stores the `serverNodeDescription.id` it received. After pairing by alias, `connect` fails with `ValueError` (`UUID("CEM1")`) before any request is made. | `S2AuthSessionInitiationTests.S2AuthClient_PairedByAlias_CannotInitiateASession` | `pairing_core.py` (`s2_node_id = pairing_s2_node_id …`; `connect`: `NodeId(UUID(pairing_s2_node_id))`) |
-| A3 | The connection initiation API of the reference server, announced as `initiateSessionUrl` (`…/connection/`), has no `initiateSession` operation: the operation is called `initiateConnection` and reads the access token from a header named `accessToken` instead of the bearer authorization. The WWCP S2 `SessionInitiationClient` gets 404 at the announced URL. | `S2AuthSessionInitiationTests.WWCPClient_InitiatesASessionWithTheS2AuthServer` | `src/s2auth/reference/server/connection.py` (`/{version}/initiateConnection`, `Header(alias="accessToken")`) |
-| A4 | The pairing API of the reference server does serve `initiateSession` with bearer authorization (and rotates the token), but its `confirmAccessToken` is a no-op: 200 without the `WebSocketCommunicationDetails`, and the pending token is never activated. Its `unpair` and `postConnectionDetails` are no-ops as well. | same test | `src/s2auth/reference/server/pairing.py` (`confirm_access_token`, `unpair`, `post_connection_details`: `pass`) |
+| A4 | `confirmAccessToken` of the reference server does not activate the pending access token. Since 0.1.1 it answers at the announced `initiateSessionUrl` with the `WebSocketCommunicationDetails` (the `websocketUrl` is the `CEM_URL` setting), but it validates and rotates the token on the snapshot `list_contexts` returns (`model_copy(deep=True)`) and never stores it: the server keeps expecting the previous token, and a second session initiation with the rotated one is refused — with 500, because the reference server maps no exception to a response (`InvalidAccessTokenError` should be a 401). Masked by this and read in the code only: were the activation stored, the `ClientState.CONNECTION_INITIATED` it sets would fail the `state != PAIRED` check of the next `initiateSession` (`PairingNotCompleteError`). In 0.1.0 `confirmAccessToken` was a no-op on the pairing API (200 without the details). `unpair` and `postConnectionDetails` are still no-ops. **Consequence for WWCP S2**: its client activates the rotated token after the 200 of `confirmAccessToken`, as specified; against s2auth 0.1.1 the next session initiation fails (`RetryLater` on the 500). | `S2AuthSessionInitiationTests.WWCPClient_InitiatesASessionWithTheS2AuthServer` | `src/s2auth/reference/server/connection.py` (`post_confirm_access_token`: `storage.list_contexts`), `src/s2auth/server/context.py` (`list_contexts`), `src/s2auth/server/connection_initiation.py` (`validate_access_token`, `initiateConnection`), `src/s2auth/reference/server/pairing.py` (`unpair`, `post_connection_details`: `pass`) |
+| A5 | The reference server always sends `certificateFingerprint` in the connection details, and an empty map (`{}`) when it has no fingerprint to give — in every WAN pairing. S2 Connect 1.0.0 (`ConnectionDetails.certificateFingerprint`, `s2-connect-pairing.yml`): "The key "SHA265" must always be provided" (sic, SHA256); the map is optional, but not empty. WWCP S2 refuses the connection details (`InvalidResponse` at `requestConnectionDetails`) and ends the attempt with `finalizePairing`. **Consequence for WWCP S2**: no WAN pairing with an s2auth 0.1.1 server (LAN pairings carry the fingerprint and pass). | `S2AuthPairingTests.WWCPPairingClient_PairsWithTheS2AuthPairingServer_WAN` | `src/s2auth/server/pairing.py` (`handle_client_response`: `certificate_fingerprint = {}`) |
 
 ### Behaviour WWCP S2 has to account for (no defect, no test marker)
 
@@ -199,12 +200,18 @@ the WWCP S2 clients against its reference server.
   substitutes an in-memory `ConnectionStore`. The reference `server` entry point binds port
   8000 with auto-reload and reads its console for a key press; the driver assembles the
   same FastAPI application itself.
+* Since 0.1.1 `confirmAccessToken` asserts that the `CEM_URL` setting is given (an unset one
+  ends in 500) and returns it as the `websocketUrl`. The reference server serves no WebSocket;
+  the driver sets `wss://<host>:<port>/websocket/` (option `--websocket-url`), which is never
+  connected to. The driver also reports the 500 of an exception s2auth does not map to a
+  response, which its request middleware would otherwise not see.
 
 ### Confirmed to work
 
 * Pairing in both directions and both deployments (`S2AuthPairingTests`): the s2auth RM
   client against the WWCP S2 pairing server (by alias and by node id) and the WWCP S2
-  `PairingClient` against the s2auth reference server. The LAN formula with the SHA-256
+  `PairingClient` against the s2auth reference server (WAN up to the connection details since
+  0.1.1, see A5). The LAN formula with the SHA-256
   fingerprint of the leaf certificate (s2auth takes it from the TLS connection, WWCP S2 from
   its endpoint) and the WAN formula with the domain name agree, both sides end with the same
   access token, the communication roles are right, and s2auth receives WWCP S2's
@@ -212,8 +219,12 @@ the WWCP S2 clients against its reference server.
 * Wrong pairing tokens are detected on both sides at the first challenge response: s2auth
   stops after `requestPairing` with `VerificationError`; the WWCP S2 client never requests
   the connection details and reports the failure with `finalizePairing`.
-* `initiateSession` at the pairing API of the reference server accepts WWCP S2's bearer
-  token and answers with a rotated token and the negotiated version (the step before A4).
+* Session initiation at the announced `initiateSessionUrl` (`…/connection/`), since 0.1.1:
+  `initiateSession` accepts WWCP S2's bearer token and answers with a rotated token and the
+  negotiated version, and `confirmAccessToken` answers with the `WebSocketCommunicationDetails`
+  (the step before A4). Fixed in 0.1.1 (`a733abf`), as A3 of 0.1.0: the connection
+  initiation API had no `initiateSession` operation (it was called `initiateConnection` and
+  read the token from an `accessToken` header), so the WWCP S2 client got 404 there.
 
 ## The ElaadNL CEM library (resflex-open-s2-hems-connector, `c12c857`)
 

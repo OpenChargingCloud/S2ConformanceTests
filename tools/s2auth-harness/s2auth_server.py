@@ -4,7 +4,7 @@ and without the interactive parts of the reference `server` entry point (fixed p
 auto-reload, the keyboard watcher that would read our stdin).
 
 Events (stdout, one JSON object per line):
-  {"event":"listening", "port":…, "pairing_url":…, "connection_url":…}
+  {"event":"listening", "port":…, "pairing_url":…, "connection_url":…, "websocket_url":…}
   {"event":"http", "method":…, "path":…, "status":…}
   {"event":"pairing_requested", "client_node_id":…, "pairing_token":…}
   {"event":"token_set", "token":…}
@@ -26,6 +26,10 @@ import sys
 from harness import describe, emit, finish, parse_command, stdin_lines
 
 
+def websocket_url(args: argparse.Namespace) -> str:
+    return args.websocket_url or f"wss://{args.public_host}:{args.port}/websocket/"
+
+
 def configure_environment(args: argparse.Namespace) -> None:
     """s2auth's server reads its settings from the environment (pydantic-settings); set them
     before anything of s2auth is imported."""
@@ -45,6 +49,9 @@ def configure_environment(args: argparse.Namespace) -> None:
         "CEM_MODEL_NAME": args.model_name,
         "CEM_BRAND": args.brand,
         "CEM_DEPLOYMENT_TYPE": args.deployment,
+        # The websocketUrl of the WebSocketCommunicationDetails that confirmAccessToken returns
+        # (s2auth after 0.1.0 asserts it is set). The reference server serves no WebSocket.
+        "CEM_URL": websocket_url(args),
         "SQLALCHEMY_DB_URI": "sqlite+aiosqlite:///:memory:",
     }
     for key, value in env.items():
@@ -89,7 +96,13 @@ async def run(args: argparse.Namespace) -> None:
 
     @app.middleware("http")
     async def report_requests(request: Request, call_next):  # type: ignore[no-untyped-def]
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            # An exception s2auth does not map to a response (it registers no exception
+            # handlers) reaches uvicorn, which answers 500.
+            emit("http", method=request.method, path=request.url.path, status=500)
+            raise
         emit("http", method=request.method, path=request.url.path, status=response.status_code)
         return response
 
@@ -113,7 +126,7 @@ async def run(args: argparse.Namespace) -> None:
         await asyncio.sleep(0.05)
 
     base = f"https://{args.public_host}:{args.port}"
-    emit("listening", port=args.port, pairing_url=f"{base}/pairing/", connection_url=f"{base}/connection/", pairing_node_id=args.pairing_node_id)
+    emit("listening", port=args.port, pairing_url=f"{base}/pairing/", connection_url=f"{base}/connection/", websocket_url=websocket_url(args), pairing_node_id=args.pairing_node_id)
 
     loop = asyncio.get_running_loop()
     commands = stdin_lines(loop)
@@ -159,6 +172,7 @@ def main() -> None:
     parser.add_argument("--token-ttl", type=int, default=300)
     parser.add_argument("--deployment", default="LAN", choices=["LAN", "WAN"], help="the deployment assumed when the client sends none")
     parser.add_argument("--s2-version", dest="s2_versions", action="append", default=None, help="a supported S2 message version (repeatable, default: v1)")
+    parser.add_argument("--websocket-url", default=None, help="the websocketUrl confirmAccessToken returns (default: wss://<public-host>:<port>/websocket/, not served)")
     parser.add_argument("--brand", default="GraphDefined")
     parser.add_argument("--node-type", default="EMS")
     parser.add_argument("--model-name", default="s2auth interop server")

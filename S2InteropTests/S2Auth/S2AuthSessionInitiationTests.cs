@@ -34,7 +34,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
     /// <summary>
     /// S2 Connect session initiation (initiateSession, confirmAccessToken, unpair) between
-    /// WWCP S2 and s2auth 0.1.0, after a pairing in the same test. s2auth implements the
+    /// WWCP S2 and s2auth 0.1.1, after a pairing in the same test. s2auth implements the
     /// HTTP part of session initiation only; it has no S2 communication server, so no S2
     /// WebSocket session is opened here. The s2auth client never reaches WWCP S2's session
     /// initiation API at all (A1 below: it posts to its pairing URL, and Hermod does not
@@ -144,11 +144,10 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
         /// <summary>
         /// The WWCP S2 client follows the initiateSessionUrl s2auth announced (/connection/),
-        /// where s2auth's connection initiation API calls the operation initiateConnection and
-        /// reads the token from an accessToken header (A3). Its pairing API serves an
-        /// initiateSession operation with bearer authentication, but its confirmAccessToken
-        /// there is a no-op that neither activates the token nor returns the communication
-        /// details (A4).
+        /// where s2auth serves initiateSession with bearer authorization (A3, fixed in s2auth
+        /// a733abf) and confirmAccessToken returns the WebSocketCommunicationDetails. A second
+        /// session initiation, with the rotated token, would prove that confirmAccessToken also
+        /// activated it; it does not (A4).
         /// </summary>
         [Test]
         [S2C("SessionInitiation.WWCPClient.S2AuthServer")]
@@ -172,39 +171,39 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
             Assert.That(paired.IsSuccess, Is.True, () => $"{paired}{Environment.NewLine}{server.Diagnostics}");
             Assert.That(paired.Pairing!.InitiateSessionUrl, Is.Not.Null);
 
-            // 1. As announced: the connection initiation API of s2auth.
-            await using var announced = new SessionInitiationClient(paired.Pairing.InitiateSessionUrl!.Value,
-                                                                    endpoint,
-                                                                    store,
-                                                                    new SessionInitiationClientOptions { ServiceUnavailableRetryDelay = TimeSpan.FromMilliseconds(100) },
-                                                                    WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
+            await using var client = new SessionInitiationClient(paired.Pairing.InitiateSessionUrl!.Value,
+                                                                 endpoint,
+                                                                 store,
+                                                                 new SessionInitiationClientOptions { ServiceUnavailableRetryDelay = TimeSpan.FromMilliseconds(100) },
+                                                                 WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
 
-            var viaConnectionAPI  = await announced.InitiateSessionAsync(node, serverNodeId);
-            var trail             = await S2AuthPairingTests.ServerTrailAsync(server, "/initiateSession");
+            // 1. With the access token from pairing.
+            var first  = await client.InitiateSessionAsync(node, serverNodeId);
+            var trail  = await S2AuthPairingTests.ServerTrailAsync(server, "/confirmAccessToken");
 
-            Interop.KnownIssue("s2auth's connection initiation API (the announced initiateSessionUrl) has no initiateSession operation: it is called initiateConnection and reads the token from an accessToken header",
-                               !viaConnectionAPI.IsSuccess &&
-                               trail.Contains(($"/connection/{Version.S2ConnectAPIVersion}/initiateSession", 404)),
-                               $"{viaConnectionAPI}{Environment.NewLine}trail: {String.Join(", ", trail)}");
+            Assert.That(first.IsSuccess, Is.True, () => $"{first}{Environment.NewLine}trail: {String.Join(", ", trail)}{Environment.NewLine}{server.Diagnostics}");
 
-            // 2. The pairing API of s2auth also serves initiateSession with bearer authentication.
-            await using var viaPairingURL = new SessionInitiationClient(S2BaseURL.Parse($"https://localhost:{port}/pairing/"),
-                                                                        endpoint,
-                                                                        store,
-                                                                        new SessionInitiationClientOptions { ServiceUnavailableRetryDelay = TimeSpan.FromMilliseconds(100) },
-                                                                        WebSocketCertificateValidator: Certificates.AcceptAny<IWebSocketClient>());
+            Assert.Multiple(() => {
+                Assert.That(trail, Does.Contain(($"/connection/{Version.S2ConnectAPIVersion}/initiateSession",      200)), "initiateSession at the announced initiateSessionUrl");
+                Assert.That(trail, Does.Contain(($"/connection/{Version.S2ConnectAPIVersion}/confirmAccessToken",   200)), "confirmAccessToken at the announced initiateSessionUrl");
+                Assert.That(first.CommunicationDetails, Is.InstanceOf<WebSocketCommunicationDetails>(),                    "confirmAccessToken returns the WebSocketCommunicationDetails");
+                Assert.That((first.CommunicationDetails as WebSocketCommunicationDetails)?.WebsocketUrl.ToString(),
+                            Is.EqualTo($"wss://localhost:{port}/websocket/"),                                              "the websocketUrl s2auth was configured with (CEM_URL)");
+            });
 
-            var viaPairingAPI  = await viaPairingURL.InitiateSessionAsync(node, serverNodeId);
-            trail              = await S2AuthPairingTests.ServerTrailAsync(server, "/confirmAccessToken");
+            // 2. With the access token rotated in step 1: only accepted if confirmAccessToken activated it.
+            //    s2auth's confirmAccessToken activates the token on a deep copy of the authentication
+            //    context (list_contexts) that is never stored, so the server still expects the old
+            //    token; the InvalidAccessTokenError that follows is answered with 500, not 401.
+            var second    = await client.InitiateSessionAsync(node, serverNodeId);
+            var rejected  = !second.IsSuccess &&
+                            await server.SawEventAsync(e => e.Value<String>("event") == "http" &&
+                                                            e.Value<String>("path")  == $"/connection/{Version.S2ConnectAPIVersion}/initiateSession" &&
+                                                            e.Value<Int32>("status") is 401 or 500);
 
-            Assert.That(trail, Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/initiateSession", 200)),
-                        () => $"initiateSession with the access token from pairing succeeds at s2auth's pairing API{Environment.NewLine}{viaPairingAPI}{Environment.NewLine}{server.Diagnostics}");
-
-            Interop.KnownIssue("s2auth's confirmAccessToken on the pairing API is a no-op: it returns 200 without WebSocketCommunicationDetails and never activates the pending access token",
-                               !viaPairingAPI.IsSuccess &&
-                               viaPairingAPI.CommunicationDetails is null &&
-                               trail.Contains(($"/pairing/{Version.S2ConnectAPIVersion}/confirmAccessToken", 200)),
-                               $"{viaPairingAPI}{Environment.NewLine}trail: {String.Join(", ", trail)}");
+            Interop.KnownIssue("s2auth's confirmAccessToken does not activate the pending access token (it changes a copy of the authentication context), so a second session initiation with the rotated token fails",
+                               rejected,
+                               $"{second}{Environment.NewLine}trail: {String.Join(", ", S2AuthPairingTests.ServerTrail(server))}");
 
         }
 

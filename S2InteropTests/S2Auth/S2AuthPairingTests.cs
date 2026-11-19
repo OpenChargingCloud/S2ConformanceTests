@@ -33,7 +33,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 {
 
     /// <summary>
-    /// S2 Connect pairing between WWCP S2 and s2auth 0.1.0 (libs/s2auth), the Python
+    /// S2 Connect pairing between WWCP S2 and s2auth 0.1.1 (libs/s2auth), the Python
     /// implementation of the pairing and session initiation flows: the s2auth client
     /// (an RM) against the WWCP S2 pairing server, and the WWCP S2 pairing client against
     /// the s2auth reference server, in the LAN (certificate fingerprint) and WAN (domain
@@ -344,15 +344,21 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
             var result = await client.PairAsync(node, PairingToken.Parse("ABCD2345"), PairingTarget.ByAlias(NodeIdAlias.Parse(ServerAlias)));
 
-            Assert.That(result.IsSuccess, Is.True, () => $"{result}{Environment.NewLine}{server.Diagnostics}");
+            // s2auth sends "certificateFingerprint": {} when it has no fingerprint to give (WAN);
+            // S2 Connect 1.0.0 (ConnectionDetails.certificateFingerprint): "The key "SHA265" must
+            // always be provided" (sic, SHA256), so WWCP S2 refuses the connection details.
+            var emptyFingerprintMap = !result.IsSuccess &&
+                                      result.Operation == "requestConnectionDetails" &&
+                                      (result.Description?.Contains("certificate fingerprints must not be empty", StringComparison.Ordinal) ?? false);
 
             var trail = await ServerTrailAsync(server, "/finalizePairing");
 
-            Assert.Multiple(() => {
-                Assert.That(result.Pairing!.RemoteNodeId,           Is.EqualTo(serverNodeId));
-                Assert.That(result.Pairing.LocalCommunicationRole,  Is.EqualTo(CommunicationRole.CommunicationClient));
-                Assert.That(trail,                                  Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/finalizePairing", 204)));
-            });
+            Assert.That(trail, Does.Contain(($"/pairing/{Version.S2ConnectAPIVersion}/requestConnectionDetails", 200)),
+                        () => $"s2auth verified the WAN challenge-response and answered with connection details{Environment.NewLine}{result}{Environment.NewLine}{server.Diagnostics}");
+
+            Interop.KnownIssue("s2auth sends an empty certificateFingerprint map in the connection details of a WAN pairing, although the key \"SHA256\" must always be provided when the map is given",
+                               emptyFingerprintMap,
+                               $"{result}{Environment.NewLine}trail: {String.Join(", ", trail)}");
 
         }
 

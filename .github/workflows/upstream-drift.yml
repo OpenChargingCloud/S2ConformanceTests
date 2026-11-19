@@ -229,7 +229,7 @@ jobs:
       # Only the reference implementations move here — the .NET side stays pinned on
       # purpose, so that a red run in this job means "s2-python, s2-rust, s2auth or resflex
       # changed" and nothing else. Note what the pins are: s2-python and s2auth sit on release
-      # tags (v0.11.1, v0.1.0), s2-rust and resflex-open-s2-hems-connector on a commit of main
+      # tags (v0.11.1, v0.1.1), s2-rust and resflex-open-s2-hems-connector on a commit of main
       # (the latter has no release yet), and all four default branches are "main" — read from
       # the remote rather than hardcoded, as in the job above.
       - name: Move the reference implementations to their upstream default branch
