@@ -97,7 +97,7 @@ dotnet test S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop|
 ```
 
 The interoperability tests start the reference implementations as external peers and
-therefore need, besides the .NET 10 SDK, a Python 3.11–3.14 interpreter (s2-python, s2auth;
+therefore need, besides the .NET 11 SDK, a Python 3.11–3.14 interpreter (s2-python, s2auth;
 the ElaadNL CEM library needs 3.13 or 3.14) and a Rust toolchain installed with [rustup](https://rustup.rs) (s2-rust). The tests look for
 `cargo` on the PATH, in `~/.cargo/bin` or in `S2_INTEROP_CARGO`, and the lock file of
 `tools/s2-rust-harness` wants at least Rust 1.88, so a distribution's own cargo package may

@@ -10,7 +10,7 @@ name: Nightly
 #    pattern rather than as "retry, it went green".
 #  * More moves here without a push than in most repositories: dtolnay/rust-toolchain
 #    resolves "stable" to whatever Rust released that week, Debian's python3 gets patch
-#    releases, "dotnet-version: 10.0.x" resolves to a new SDK patch, and the runner images
+#    releases, "dotnet-version: 11.0.x" resolves to a new SDK patch, and the runner images
 #    change underneath all of it. A red here with a green CI on the same commit points at
 #    exactly that. Fatal: a red night is a real regression.
 #
@@ -82,7 +82,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
 
       - name: Setup Python
         if: runner.os == 'Windows'

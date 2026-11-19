@@ -328,7 +328,14 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                 if (remaining <= TimeSpan.Zero)
                     throw new TimeoutException($"[{Name}] '{Description ?? "the awaited event"}' did not arrive within {timeout}.{Environment.NewLine}Events:{Environment.NewLine}{String.Join(Environment.NewLine, Events.Select(e => e.ToString(Formatting.None)))}{Environment.NewLine}{Diagnostics}");
 
-                await Task.WhenAny(waiter.Task, Task.Delay(remaining));
+                try
+                {
+                    await waiter.Task.WaitAsync(remaining);
+                }
+                catch (TimeoutException)
+                {
+                    // The next round finds the deadline passed and reports it.
+                }
 
             }
 
@@ -424,7 +431,14 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                         // The pipe may already be closed.
                     }
 
-                    await Task.WhenAny(exited.Task, Task.Delay(TimeSpan.FromSeconds(2)));
+                    try
+                    {
+                        await exited.Task.WaitAsync(TimeSpan.FromSeconds(2));
+                    }
+                    catch (TimeoutException)
+                    {
+                        // Killed below.
+                    }
 
                 }
 

@@ -38,7 +38,7 @@ dotnet test  S2InteropTests/S2InteropTests.csproj --filter "TestCategory=Interop
 ```
 
 Expected (2026-11-19): 135 tests, 110 passed, 25 known issues (warnings), 0 failed, on
-Windows and on Linux. Prerequisites: .NET 10 SDK, Python 3.11–3.14 (3.13 or later for the
+Windows and on Linux. Prerequisites: .NET 11 SDK, Python 3.11–3.14 (3.13 or later for the
 ElaadNL CEM library, whose `s2_cem_lib` is imported from the submodule, not installed), Rust
 via rustup. On
 Windows that means two installations, and both are needed for the full suite: a native one
