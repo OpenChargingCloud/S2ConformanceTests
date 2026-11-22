@@ -156,9 +156,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
         {
 
             var certificate = SelfSignedCA.CreateSelfSignedServerCertificate(HostName,
-                                                                             IPAddresses: IPAddresses?.Select(ip => ip.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                                                                                                                        ? (IIPAddress) IPv4Address.Parse(ip.ToString())
-                                                                                                                        : IPv6Address.Parse(ip.ToString())));
+                                                                             IPAddresses: IPAddresses?.Select(ip => IPAddress.Parse(ip.ToString())));
 
             var keyPemText  = certificate.GetECDsaPrivateKey()?.ExportPkcs8PrivateKeyPem()
                                   ?? certificate.GetRSAPrivateKey()?.ExportPkcs8PrivateKeyPem()
