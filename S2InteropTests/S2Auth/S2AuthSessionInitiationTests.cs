@@ -34,7 +34,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 
     /// <summary>
     /// S2 Connect session initiation (initiateSession, confirmAccessToken, unpair) between
-    /// WWCP S2 and s2auth 0.1.1, after a pairing in the same test. s2auth implements the
+    /// WWCP S2 and s2auth 0.1.2, after a pairing in the same test. s2auth implements the
     /// HTTP part of session initiation only; it has no S2 communication server, so no S2
     /// WebSocket session is opened here. The s2auth client never reaches WWCP S2's session
     /// initiation API at all (A1 below: it posts to its pairing URL, and Hermod does not

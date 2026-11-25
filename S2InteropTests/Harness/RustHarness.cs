@@ -432,7 +432,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.Harness
                                                            [ "-d", wsl.Distribution, "-e", "python3", "-c", script ],
                                                            Timeout: TimeSpan.FromSeconds(15));
 
-                if (probe.StandardOutput.Contains("reachable", StringComparison.Ordinal))
+                if (probe.StandardOutput.Trim() == "reachable")   // not Contains: "unreachable: ..." contains it too
                 {
                     try
                     {

@@ -45,9 +45,9 @@ gets exactly one `ReceptionStatus`.
 |-----------|---------|
 | [`libs/WWCP_S2`](https://github.com/OpenChargingCloud/WWCP_S2) | **The stack under test**: S2 JSON messages, S2 Connect pairing, session initiation and the WebSocket transport in C#. Its `WWCP_S2Tests` project provides the schema validator and the `[S2C]` traceability attribute, and runs in the CI here as well. |
 | [`libs/Styx`](https://github.com/Vanaheimr/Styx), [`libs/Hermod`](https://github.com/Vanaheimr/Hermod) | Foundations of the stack: helpers, networking (HTTP, WebSockets, TLS, PKI). WWCP S2 references them as sibling directories, which is why they have to be checked out. |
-| [`libs/s2-python`](https://github.com/flexiblepower/s2-python) | Reference implementation #1 (v0.11.1): pydantic models and `S2AsyncConnection` over WebSockets in plain mode with the `Handshake` exchange. Installed into a virtual environment by the tests. |
+| [`libs/s2-python`](https://github.com/flexiblepower/s2-python) | Reference implementation #1 (v0.11.2): pydantic models and `S2AsyncConnection` over WebSockets in plain mode with the `Handshake` exchange. Installed into a virtual environment by the tests. |
 | [`libs/s2-rust`](https://github.com/flexiblepower/s2-rust) | Reference implementation #2: the message layer (`s2energy-messaging`, generated from its own JSON schema) and S2 Connect pairing, session initiation and communication (`s2energy-connection`). Wrapped by the driver binaries. |
-| [`libs/s2auth`](https://github.com/flexiblepower/s2auth) | Reference implementation #3 (v0.1.1): S2 Connect pairing and session initiation in Python (client library, FastAPI reference server), the HTTP part only. Installed into its own virtual environment by the tests. |
+| [`libs/s2auth`](https://github.com/flexiblepower/s2auth) | Reference implementation #3 (v0.1.2): S2 Connect pairing and session initiation in Python (client library, FastAPI reference server), the HTTP part only. Installed into its own virtual environment by the tests. |
 | [`libs/resflex-open-s2-hems-connector`](https://github.com/ElaadNL/resflex-open-s2-hems-connector) | The open reference implementation of a CEM of the ElaadNL Residential Flexibility initiative (`c12c857`, the initial public release, no tag yet): `s2_cem_lib`, a Python library with its own S2 Connect pairing, session initiation and long polling on aiohttp, the S2 messages from s2-python, and PEBC as its only control type. Imported from the submodule by the driver; its dependencies live in a virtual environment of their own. |
 | [`libs/s2-json`](https://github.com/flexiblepower/s2-json) | **The normative S2 JSON schemas** (v1.0.0 plus the erratum of s2-json#32, commit `02772ed`, which only corrects two descriptions in `ControlType.schema.json`): 36 message and 41 type schemas. WWCP S2 embeds a copy; the drift tests compare the two. |
 | [`libs/s2-connect`](https://github.com/flexiblepower/s2-connect) | **The normative S2 Connect OpenAPI files** (tag v1.0): pairing, session initiation, common types, WAN endpoint registry. WWCP S2 embeds a copy; the drift tests compare the two. |
@@ -79,8 +79,8 @@ value is accepted by the WWCP S2 type of that name.
 
 ## Findings
 
-[FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 and 0.11.1, s2-rust, s2auth
-0.1.0 and 0.1.1, the ElaadNL CEM library, the S2 documentation and Hermod, with the test that reproduces each finding, the place
+[FINDINGS.md](FINDINGS.md) lists what the tests found in s2-python 0.10.0 to 0.11.2, s2-rust, s2auth
+0.1.0 to 0.1.2, the ElaadNL CEM library, the S2 documentation and Hermod, with the test that reproduces each finding, the place
 upstream and the consequence for WWCP S2. State on 2026-11-19: 135 tests, 110 passed,
 25 known issues, 0 failed. Known issues are pinned in their tests with
 `Interop.KnownIssue(...)`: they end with a warning while the issue exists and fail once the

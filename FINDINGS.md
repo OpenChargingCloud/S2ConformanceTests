@@ -8,13 +8,13 @@ issues" kind is marked in its test with `Interop.KnownIssue(...)`: the test ends
 (the test adapter shows it as skipped) while the issue exists and fails once the upstream
 behaviour changes, so that the marker gets removed and the fix recorded here.
 
-State on 2026-11-22: WWCP S2 `ade67f3` (.NET 11), Hermod `d27b68b`, Styx `ff807a4`, s2-python
-v0.11.1 (`1df4e91`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.1 (`a733abf`),
+State on 2026-11-25: WWCP S2 `2667601` (.NET 11), Hermod `67cf52e`, Styx `cbc88e1`, s2-python
+v0.11.2 (`42b99a9`), s2-rust `afedaa4` (2026-09, after 0.3.0), s2auth v0.1.2 (`d6cb440`),
 resflex-open-s2-hems-connector `c12c857` (the initial public release), s2-json `02772ed`
 (v1.0.0 plus the ControlType description erratum of s2-json#32), s2-connect v1.0
-(`d434762`), s2-documentation `316907e`. 135 tests: 110 passed, 25 known issues, 0 failed —
+(`d434762`), s2-documentation `c5d17e4`. 135 tests: 110 passed, 25 known issues, 0 failed —
 on Windows 11 with the S2 Connect drivers of s2-rust inside WSL. Every s2-python finding
-below was found in 0.10.0 and is still present in 0.11.1. Linux (Debian 13, everything
+below was found in 0.10.0 and is still present in 0.11.2. Linux (Debian 13, everything
 native) has passed since Hermod `3d92759` (H1, H2 below) and is gated by ci.yml.
 
 ## The specification texts the tests hold the implementations to
@@ -173,7 +173,9 @@ The Python implementation of S2 Connect pairing and session initiation (a client
 a FastAPI reference server; no S2 communication server). Tested through the drivers of
 `tools/s2auth-harness`: as an RM pairing client against the WWCP S2 pairing server, and with
 the WWCP S2 clients against its reference server. A1 to A4 were found in 0.1.0; 0.1.1
-(`a733abf`, "Client sd") fixed A3, half of A4, and brought A5.
+(`a733abf`, "Client sd") fixed A3, half of A4, and brought A5. 0.1.2 (`d6cb440`) treats the
+`pairingAttemptId` as an opaque string and advertises `_s2connect._tcp` for DNS-SD; A1, A2, A4
+and A5 are unchanged.
 
 ### Known issues
 

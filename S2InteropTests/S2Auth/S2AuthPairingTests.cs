@@ -33,7 +33,7 @@ namespace cloud.charging.open.protocols.S2.InteropTests.S2Auth
 {
 
     /// <summary>
-    /// S2 Connect pairing between WWCP S2 and s2auth 0.1.1 (libs/s2auth), the Python
+    /// S2 Connect pairing between WWCP S2 and s2auth 0.1.2 (libs/s2auth), the Python
     /// implementation of the pairing and session initiation flows: the s2auth client
     /// (an RM) against the WWCP S2 pairing server, and the WWCP S2 pairing client against
     /// the s2auth reference server, in the LAN (certificate fingerprint) and WAN (domain
